@@ -120,10 +120,24 @@ export function updateShortTermMemory(role, content) {
         shortTermMemory.summary = buildSummary(shortTermMemory.messages);
     }
 }
+// SHORT-TERM MEMORY -----------------------------------------------------------------------------
+export function buildChatPrompt(latestUserMessage, longTermMemories = []) {
+    const longTermSection = longTermMemories.length
+        ? longTermMemories
+            .map(memory =>
+                `- ${memory.category}: ${memory.content}`
+            )
+            .join("\n")
+        : "No long-term memories available.";
 
-export function buildChatPrompt(latestUserMessage) {
     return [
         "You are continuing an active conversation with the user.",
+        "Use long-term memories only when relevant.",
+        "Do not mention the memory system.",
+        "",
+        "Long-term memories:",
+        longTermSection,
+        "",
         `Current task: ${shortTermMemory.currentTask || "No current task yet."}`,
         `Recent topics: ${
             shortTermMemory.recentTopics.length
@@ -140,4 +154,5 @@ export function buildChatPrompt(latestUserMessage) {
         `Latest user message: ${latestUserMessage}`
     ].join("\n");
 }
-// SHORT-TERM MEMORY -----------------------------------------------------------------------------
+
+
