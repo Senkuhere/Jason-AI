@@ -1,7 +1,10 @@
 import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 import readline from "readline";
+import { buildJasonSystemPrompt } from "./personality.js";
+
 import {
+    shortTermMemory,
     loadShortTermMemory,
     saveShortTermMemory,
     updateShortTermMemory,
@@ -13,6 +16,7 @@ import {
     checkDatabaseConnection
 } from "./long-term-memory.js";
 
+
 const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY
 });
@@ -21,6 +25,7 @@ const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
 });
+
 
 
 async function evaluateLongTermMemory(userMessage) {
@@ -76,6 +81,8 @@ ${userMessage}
     return JSON.parse(cleanedText);
 }
 
+
+
 function chat() {
 
     rl.question("You: ", async function(message) {
@@ -103,9 +110,24 @@ function chat() {
                 longTermMemories
             );
 
+            const currentDate = new Intl.DateTimeFormat("en-PH", {
+            dateStyle: "full",
+            timeStyle: "long",
+            timeZone: "Asia/Manila"
+        }).format(new Date());
+
+            const systemInstruction = buildJasonSystemPrompt({
+                currentTask: shortTermMemory.currentTask,
+                recentTopics: shortTermMemory.recentTopics,
+                currentDate
+            });
+
             const response = await ai.models.generateContent({
                 model: "gemini-3.5-flash-lite",
-                contents: prompt
+                contents: prompt,
+                config: {
+                    systemInstruction
+                }
             });
 
             const assistantReply = response.text;
