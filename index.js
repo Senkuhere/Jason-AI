@@ -131,10 +131,15 @@ function chat() {
                 }
             });
 
-            const functionCalls = response.functionCalls;
+            const modelContent = response.candidates?.[0]?.content;
+            const functionCallPart = modelContent?.parts?.find(
+                part => part.functionCall
+            );
 
-            if (functionCalls?.length) {
-                const functionCall = functionCalls[0];
+            let assistantReply = response.text;
+
+            if (functionCallPart) {
+                const functionCall = functionCallPart.functionCall;
 
                 console.log("Jason requested tool:", functionCall.name);
                 console.log("Arguments:", functionCall.args);
@@ -144,11 +149,36 @@ function chat() {
                     functionCall.args
                 );
 
-                console.log("Tool result:");
-                console.log(toolResult);
-            }
+                const followUpResponse = await ai.models.generateContent({
+                    model: "gemini-3.5-flash-lite",
+                    contents: [
+                        {
+                            role: "user",
+                            parts: [{ text: prompt }]
+                        },
+                        modelContent,
+                        {
+                            role: "user",
+                            parts: [
+                                {
+                                    functionResponse: {
+                                        name: functionCall.name,
+                                        response: {
+                                            result: toolResult
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    ],
+                    config: {
+                        systemInstruction,
+                        tools: toolDefinitions
+                    }
+                });
 
-            const assistantReply = response.text;
+                assistantReply = followUpResponse.text;
+            }
 
             const memoryDecision = await evaluateLongTermMemory(trimmedMessage);
 
