@@ -58,6 +58,9 @@ export async function saveShortTermMemory() {
 }
 
 export function extractTopics(text) {
+    if (typeof text !== "string") {
+        return [];
+    }
     const words = text.toLowerCase().match(/[a-z0-9]+/g) || [];
 
     const stopWords = new Set([
