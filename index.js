@@ -2,6 +2,8 @@ import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 import readline from "readline";
 import { buildJasonSystemPrompt } from "./personality.js";
+import { toolDefinitions } from "./tools/tool-definitions.js";
+import { executeTool } from "./tools/tool-router.js";
 
 import {
     shortTermMemory,
@@ -81,8 +83,6 @@ ${userMessage}
     return JSON.parse(cleanedText);
 }
 
-
-
 function chat() {
 
     rl.question("You: ", async function(message) {
@@ -126,9 +126,27 @@ function chat() {
                 model: "gemini-3.5-flash-lite",
                 contents: prompt,
                 config: {
-                    systemInstruction
+                    systemInstruction,
+                    tools: toolDefinitions
                 }
             });
+
+            const functionCalls = response.functionCalls;
+
+            if (functionCalls?.length) {
+                const functionCall = functionCalls[0];
+
+                console.log("Jason requested tool:", functionCall.name);
+                console.log("Arguments:", functionCall.args);
+
+                const toolResult = await executeTool(
+                    functionCall.name,
+                    functionCall.args
+                );
+
+                console.log("Tool result:");
+                console.log(toolResult);
+            }
 
             const assistantReply = response.text;
 
