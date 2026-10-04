@@ -135,8 +135,10 @@ export function buildChatPrompt(latestUserMessage, longTermMemories = []) {
 
     return [
         "You are continuing an active conversation with the user.",
-        "Use long-term memories only when relevant.",
-        "Do not mention the memory system.",
+        "Treat the following long-term memories as known facts about the user.",
+        "When the user asks about their personal facts, preferences, school, age, or background, use matching memories from this section.",
+        "Do not say you do not know something if a matching memory is present.",
+        "Do not mention the memory system or describe how these facts were retrieved.",
         "",
         "Long-term memories:",
         longTermSection,

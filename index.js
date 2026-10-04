@@ -2,8 +2,8 @@ import "dotenv/config";
 import { GoogleGenAI } from "@google/genai";
 import readline from "readline";
 import { buildJasonSystemPrompt } from "./personality.js";
-import { toolDefinitions } from "./tools/tool-definitions.js";
-import { executeTool } from "./tools/tool-router.js";
+import { toolDefinitions } from "./file_tools/tool-definitions.js";
+import { executeTool } from "./file_tools/tool-router.js";
 
 import {
     shortTermMemory,
@@ -19,6 +19,10 @@ import {
 } from "./long-term-memory.js";
 
 
+
+const MAX_AGENT_STEPS = 6;
+const MAX_TOOL_CALLS_PER_STEP = 5;
+
 const ai = new GoogleGenAI({
     apiKey: process.env.GEMINI_API_KEY
 });
@@ -29,7 +33,7 @@ const rl = readline.createInterface({
 });
 
 
-
+// Run the evaluation prompt for long-term memory through the AI model
 async function evaluateLongTermMemory(userMessage) {
     const evaluationPrompt = `
 Determine whether this user message contains durable information worth remembering.
@@ -83,12 +87,94 @@ ${userMessage}
     return JSON.parse(cleanedText);
 }
 
-function chat() {
+// THIS FUNCTION RUNS THE AGENT LOOP, HANDLING TOOL CALLS AND RESPONSES
+async function localToolsAgent(prompt, systemInstruction) {
+    const contents = [
+        {
+            role: "user",
+            parts: [{ text: prompt }]
+        }
+    ];
 
-    rl.question("You: ", async function(message) {
+    let totalToolCalls = 0;
+
+    for (let step = 0; step < MAX_AGENT_STEPS; step++) {
+        const response = await ai.models.generateContent({
+            model: "gemini-3.5-flash-lite",
+            contents,
+            config: {
+                systemInstruction,
+                tools: toolDefinitions
+            }
+        });
+
+        const modelContent = response.candidates?.[0]?.content;
+
+        const functionCalls = modelContent?.parts
+            ?.filter(part => part.functionCall)
+            .map(part => part.functionCall) || [];
+
+        if (functionCalls.length === 0) {
+            return response.text || "Task completed.";
+        }
+
+        if (functionCalls.length > MAX_TOOL_CALLS_PER_STEP) {
+            throw new Error("Too many tool calls in one response.");
+        }
+
+        totalToolCalls += functionCalls.length;
+
+        if (totalToolCalls > 30) {
+            throw new Error("Agent exceeded the maximum number of tool calls.");
+        }
+
+        contents.push(modelContent);
+
+        const functionResponseParts = [];
+
+        for (const functionCall of functionCalls) {
+            let result;
+
+            try {
+                console.log("Jason requested tool:", functionCall.name);
+                console.log("Arguments:", functionCall.args);
+
+                result = await executeTool(
+                    functionCall.name,
+                    functionCall.args || {}
+                );
+            } catch (error) {
+                result = {
+                    ok: false,
+                    error: error.message
+                };
+            }
+
+            functionResponseParts.push({
+                functionResponse: {
+                    name: functionCall.name,
+                    response: {
+                        result
+                    }
+                }
+            });
+        }
+
+        contents.push({
+            role: "user",
+            parts: functionResponseParts
+        });
+    }
+
+    throw new Error("Agent exceeded the maximum number of reasoning steps.");
+}
+// THIS FUNCTION HANDLES THE CHAT LOOP WITH THE USER
+function chat() {
+    // Prompt the user for input
+    rl.question("You: ", async function(message) { 
         const trimmedMessage = message.trim();
 
-        
+        // Handle the "exit" command to terminate the chat
         if (trimmedMessage.toLowerCase() === "exit") {
             await saveShortTermMemory();
 
@@ -96,11 +182,12 @@ function chat() {
             console.log("Jason is offline.");
             process.exit(0);
         }
-
+        // If the message is empty, continue the chat loop
         if (!trimmedMessage) {
             chat();
             return;
         }
+        // Process the user's message and generate a response
         try {
             updateShortTermMemory("user", trimmedMessage);
             const longTermMemories = await getLongTermMemories();
@@ -110,78 +197,21 @@ function chat() {
                 longTermMemories
             );
 
-            const currentDate = new Intl.DateTimeFormat("en-PH", {
-            dateStyle: "full",
-            timeStyle: "long",
-            timeZone: "Asia/Manila"
-        }).format(new Date());
-
+           
+            // Build the system instruction with the current task, recent topics, and current date
             const systemInstruction = buildJasonSystemPrompt({
                 currentTask: shortTermMemory.currentTask,
-                recentTopics: shortTermMemory.recentTopics,
-                currentDate
+                recentTopics: shortTermMemory.recentTopics
             });
-
-            const response = await ai.models.generateContent({
-                model: "gemini-3.5-flash-lite",
-                contents: prompt,
-                config: {
-                    systemInstruction,
-                    tools: toolDefinitions
-                }
-            });
-
-            const modelContent = response.candidates?.[0]?.content;
-            const functionCallPart = modelContent?.parts?.find(
-                part => part.functionCall
+            // Execute the local tools agent with the prompt and system instruction
+            const assistantReply = await localToolsAgent(
+                prompt,
+                systemInstruction
             );
 
-            let assistantReply = response.text;
-
-            if (functionCallPart) {
-                const functionCall = functionCallPart.functionCall;
-
-                console.log("Jason requested tool:", functionCall.name);
-                console.log("Arguments:", functionCall.args);
-
-                const toolResult = await executeTool(
-                    functionCall.name,
-                    functionCall.args
-                );
-
-                const followUpResponse = await ai.models.generateContent({
-                    model: "gemini-3.5-flash-lite",
-                    contents: [
-                        {
-                            role: "user",
-                            parts: [{ text: prompt }]
-                        },
-                        modelContent,
-                        {
-                            role: "user",
-                            parts: [
-                                {
-                                    functionResponse: {
-                                        name: functionCall.name,
-                                        response: {
-                                            result: toolResult
-                                        }
-                                    }
-                                }
-                            ]
-                        }
-                    ],
-                    config: {
-                        systemInstruction,
-                        tools: toolDefinitions
-                    }
-                });
-
-                assistantReply = followUpResponse.text;
-            }
-
+            // Evaluate whether the user's message contains durable information worth saving in long-term memory
             const memoryDecision = await evaluateLongTermMemory(trimmedMessage);
-
+            // If the decision is to save, store the information in long-term memory
             if (
                 memoryDecision.shouldSave &&
                 memoryDecision.category &&
@@ -192,7 +222,7 @@ function chat() {
                     content: memoryDecision.content
                 });
             }
-
+            // Update the short-term memory with the assistant's reply and save it
             updateShortTermMemory("assistant", assistantReply);
             await saveShortTermMemory();
             
@@ -200,14 +230,14 @@ function chat() {
         } catch (error) {
             console.error("Error in chat:", error.message);
         }
-
+        // Continue the chat loop
         chat();
     });
 }
-
+// THIS FUNCTION INITIALIZES THE AGENT, LOADS MEMORY, AND STARTS THE CHAT LOOP
 async function start() {
     await loadShortTermMemory();
-
+    // Check the database connection and ensure the long_term_memories table exists
     try {
         const database = await checkDatabaseConnection();
 
@@ -224,5 +254,5 @@ async function start() {
         process.exit(1);
     }
 }
-
+// Start Jason AI Assistant
 start();
