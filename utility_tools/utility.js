@@ -37,16 +37,16 @@ export async function getWeather(query) {
         throw new Error("A city or location is required.");
     }
 
-    const OPENWEATHER_API_KEY = "REMOVED_OPENWEATHER_KEY";
+    const apiKey = process.env.OPENWEATHER_API_KEY;
 
-    if (!OPENWEATHER_API_KEY) {
+    if (!apiKey) {
         throw new Error("OPENWEATHER_API_KEY is not configured.");
     }
 
     const locationParams = new URLSearchParams({
         q: query.trim(),
         limit: "1",
-        appid: OPENWEATHER_API_KEY
+        appid: apiKey
     });
 
     const locationResponse = await fetch(
@@ -73,7 +73,7 @@ export async function getWeather(query) {
         lat: String(location.lat),
         lon: String(location.lon),
         units: "metric",
-        appid: OPENWEATHER_API_KEY
+        appid: apiKey
     });
 
     const weatherResponse = await fetch(
@@ -124,7 +124,7 @@ export async function searchWeb(query, maxResults = 5) {
         throw new Error("A search query is required.");
     }
 
-    const apiKey = "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";
+    const apiKey = process.env.TAVILY_API_KEY;
 
     if (!apiKey) {
         throw new Error("TAVILY_API_KEY is not configured.");
