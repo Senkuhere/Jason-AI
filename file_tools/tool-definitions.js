@@ -134,6 +134,40 @@ export const toolDefinitions = [
         type: "OBJECT",
         properties: {}
     }
+},
+// Weather tool
+{
+    name: "get_weather",
+    description: "Get the current weather for a city or location.",
+    parameters: {
+        type: "OBJECT",
+        properties: {
+            query: {
+                type: "STRING",
+                description: "A city or location, such as Manila or Cebu City."
+            }
+        },
+        required: ["query"]
+    }
+},
+// Web search tool
+{
+    name: "search_web",
+    description: "Search the web for current or external information using Tavily. Use this for recent events, research, current facts, and information not available from memory.",
+    parameters: {
+        type: "OBJECT",
+        properties: {
+            query: {
+                type: "STRING",
+                description: "A precise web search query."
+            },
+            maxResults: {
+                type: "NUMBER",
+                description: "Maximum number of results to return, from 1 to 10."
+            }
+        },
+        required: ["query"]
+    }
 }
         ]
     }

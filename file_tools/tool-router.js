@@ -10,8 +10,11 @@ import {
 
 import {
     calculator,
-    getCurrentDate
+    getCurrentDate,
+    getWeather,
+    searchWeb
  } from "../utility_tools/utility.js";
+
 
 export async function executeTool(name, args) {
     if (name === "read_project_file") {
@@ -24,29 +27,36 @@ export async function executeTool(name, args) {
         return createFolderDirectory(args.directoryPath);
     }
     if (name === "edit_project_file") {
-    return editProjectFile(
-        args.filePath,
-        args.oldText,
-        args.newText
+        return editProjectFile(
+            args.filePath,
+            args.oldText,
+            args.newText
     );
     }
     if (name === "append_project_file") {
-    return appendProjectFile(
-        args.filePath,
-        args.content
+        return appendProjectFile(
+            args.filePath,
+            args.content
     );
     }
     if (name === "list_project_directory") {
-    return listProjectDirectory(
-        args.directoryPath,
-        args.recursive
+        return listProjectDirectory(
+            args.directoryPath,
+            args.recursive
     );
     }
     if (name === "calculator") {
-    return calculator(args.expression);
+        return calculator(args.expression);
     }
     if (name === "get_current_date") {
-    return getCurrentDate();
+        return getCurrentDate();
+    }
+
+    if (name === "get_weather") {
+        return getWeather(args.query);
+    }
+    if (name === "search_web") {
+        return searchWeb(args.query, args.maxResults);
     }
 
     throw new Error(`Unknown tool: ${name}`);

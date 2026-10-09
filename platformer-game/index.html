@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shadow Realms: Epic Platformer</title>
+    <!-- Google Fonts for Realistic/Atmospheric typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for UI icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Stylesheet -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- Header / Navigation -->
+    <header class="game-header">
+        <div class="header-container">
+            <div class="logo">
+                <i class="fa-solid fa-gamepad"></i>
+                <span>SHADOW <strong>REALMS</strong></span>
+            </div>
+            <nav class="nav-links">
+                <a href="#game-section" class="nav-link active"><i class="fa-solid fa-play"></i> Play Game</a>
+                <a href="#guide-section" class="nav-link"><i class="fa-solid fa-book-open"></i> How to Play</a>
+                <a href="#features-section" class="nav-link"><i class="fa-solid fa-shield-halved"></i> Features</a>
+            </nav>
+            <div class="header-social">
+                <button id="fullscreen-btn" title="Toggle Fullscreen"><i class="fa-solid fa-expand"></i></button>
+                <button id="sound-btn" title="Toggle Sound"><i class="fa-solid fa-volume-high"></i></button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        <!-- Hero & Game Arena Section -->
+        <section id="game-section" class="game-arena-section">
+            <div class="game-intro">
+                <h1>Vanquish the Darkness</h1>
+                <p>Command your warrior through treacherous caverns, defeat corrupted beasts, and claim ultimate glory.</p>
+            </div>
+
+            <!-- Game Container with HUD & Canvas -->
+            <div class="game-wrapper">
+                <div class="game-container">
+                    <!-- HUD Overlay -->
+                    <div id="game-hud" class="game-hud">
+                        <div class="hud-item health-box">
+                            <i class="fa-solid fa-heart"></i>
+                            <div class="bar-outer">
+                                <div id="health-bar-fill" class="bar-inner"></div>
+                            </div>
+                            <span id="health-text">100 / 100</span>
+                        </div>
+                        <div class="hud-item stats-box">
+                            <span><i class="fa-solid fa-skull"></i> Monsters: <strong id="score-text">0</strong></span>
+                            <span><i class="fa-solid fa-coins"></i> Gold: <strong id="gold-text">0</strong></span>
+                            <span><i class="fa-solid fa-layer-group"></i> Wave: <strong id="wave-text">1</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Game Canvas -->
+                    <canvas id="gameCanvas" width="960" height="540"></canvas>
+
+                    <!-- Interactive Overlay Screens -->
+                    <div id="start-screen" class="overlay-screen active">
+                        <div class="overlay-content">
+                            <h2>SHADOW REALMS</h2>
+                            <p>A realistic platformer adventure with smooth combat and animations.</p>
+                            <button id="start-btn" class="epic-btn"><i class="fa-solid fa-play"></i> Start Adventure</button>
+                        </div>
+                    </div>
+
+                    <div id="gameover-screen" class="overlay-screen">
+                        <div class="overlay-content defeat">
+                            <h2>YOU HAVE FALLEN</h2>
+                            <p>The shadows claimed your soul. Rise again and try once more!</p>
+                            <div class="final-stats">
+                                <span>Monsters Slain: <strong id="final-score">0</strong></span>
+                                <span>Gold Collected: <strong id="final-gold">0</strong></span>
+                            </div>
+                            <button id="restart-btn" class="epic-btn"><i class="fa-solid fa-rotate-right"></i> Try Again</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Controls & Quick Bar -->
+                <div class="game-controls-bar">
+                    <div class="control-legend">
+                        <span><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> Move</span>
+                        <span><kbd>W</kbd> / <kbd>Space</kbd> Jump</span>
+                        <span><kbd>J</kbd> / <kbd>Z</kbd> Sword Attack</span>
+                        <span><kbd>K</kbd> / <kbd>X</kbd> Special Dash</span>
+                    </div>
+                    <button id="pause-btn" class="secondary-btn"><i class="fa-solid fa-pause"></i> Pause</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Guide & Controls Section -->
+        <section id="guide-section" class="info-section">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Combat Manual & Controls</h2>
+                    <p>Master your weapon and abilities to survive the monster onslaught.</p>
+                </div>
+                <div class="guide-grid">
+                    <div class="guide-card">
+                        <div class="card-icon"><i class="fa-solid fa-person-running"></i></div>
+                        <h3>Agile Movement</h3>
+                        <p>Use Left/Right arrow keys or A/D to maneuver across platforms. Timing your jumps is crucial to avoid falling or monster ambushes.</p>
+                    </div>
+                    <div class="guide-card">
+                        <div class="card-icon"><i class="fa-solid fa-sword"></i></div>
+                        <h3>Melee Slash Combo</h3>
+                        <p>Press <strong>J</strong> or <strong>Z</strong> to swing your enchanted blade. Consecutive hits deal devastating combo damage to beasts.</p>
+                    </div>
+                    <div class="guide-card">
+                        <div class="card-icon"><i class="fa-solid fa-bolt"></i></div>
+                        <h3>Shadow Dash</h3>
+                        <p>Press <strong>K</strong> or <strong>X</strong> to dash through enemies instantly, avoiding damage while cutting down anything in your path.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Features Showcase Section -->
+        <section id="features-section" class="info-section dark-bg">
+            <div class="container">
+                <div class="section-title">
+                    <h2>Realistic Design & Smooth Animations</h2>
+                    <p>Engineered for high-performance fluid gameplay and atmospheric immersion.</p>
+                </div>
+                <div class="features-grid">
+                    <div class="feature-item">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <div>
+                            <h4>Dynamic Particle FX</h4>
+                            <p>Sparking blade trails, blood splatter particles, floating damage numbers, and golden coin pickup bursts.</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fa-solid fa-mountain-sun"></i>
+                        <div>
+                            <h4>Parallax Backgrounds</h4>
+                            <p>Multi-layered atmospheric background with drifting clouds, distant mountain silhouettes, and glowing cavern runes.</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fa-solid fa-ghost"></i>
+                        <div>
+                            <h4>Smart AI Monsters</h4>
+                            <p>Patrolling goblins and flying gargoyles that detect your presence, chase, jump, and attack back.</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fa-solid fa-gauge-high"></i>
+                        <div>
+                            <h4>60 FPS Smooth Render</h4>
+                            <p>Built with native HTML5 Canvas and requestAnimationFrame for buttery smooth motion and responsive controls.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="game-footer">
+        <div class="footer-container">
+            <p>&copy; 2025 Shadow Realms Platformer. Designed with modern HTML5, CSS3, and JavaScript.</p>
+            <div class="footer-links">
+                <a href="#">Privacy Policy</a>
+                <a href="#">Terms of Service</a>
+                <a href="#">Support</a>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Custom JavaScript -->
+    <script src="js/game.js"></script>
+</body>
+</html>
