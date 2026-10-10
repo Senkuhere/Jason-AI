@@ -12,7 +12,8 @@ import {
     calculator,
     getCurrentDate,
     getWeather,
-    searchWeb
+    searchWeb,
+    openWebPage
  } from "../utility_tools/utility.js";
 
 
@@ -57,6 +58,9 @@ export async function executeTool(name, args) {
     }
     if (name === "search_web") {
         return searchWeb(args.query, args.maxResults);
+    }
+    if (name === "open_web_page") {
+        return openWebPage(args.url);
     }
 
     throw new Error(`Unknown tool: ${name}`);

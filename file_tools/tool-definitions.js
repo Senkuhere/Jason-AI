@@ -153,7 +153,7 @@ export const toolDefinitions = [
 // Web search tool
 {
     name: "search_web",
-    description: "Search the web for current or external information using Tavily. Use this for recent events, research, current facts, and information not available from memory.",
+    description: "Search the web for current information or an exact webpage, song, video, or other media. For media requests, return precise matching results and prefer official sources.",
     parameters: {
         type: "OBJECT",
         properties: {
@@ -167,6 +167,22 @@ export const toolDefinitions = [
             }
         },
         required: ["query"]
+    }
+},
+{
+    name: "open_web_page",
+    description:
+        "Open a webpage in the user's default browser. Use this when the user wants to view a specific webpage or a useful URL returned by search_web.",
+    parameters: {
+        type: "OBJECT",
+        properties: {
+            url: {
+                type: "STRING",
+                description:
+                    "The complete http or https URL to open."
+            }
+        },
+        required: ["url"]
     }
 }
         ]

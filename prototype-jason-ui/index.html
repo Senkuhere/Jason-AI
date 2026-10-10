@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. / Jason — Cinematic AI Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Include Three.js via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar / Conversation Area (Left Side) -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="brand-avatar">J</div>
+                    <div class="brand-info">
+                        <span class="brand-title">J.A.R.V.I.S. / Jason</span>
+                        <span class="brand-subtitle">Cinematic AI Interface</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages Stream in Sidebar -->
+            <div class="chat-messages" id="chatMessages">
+                <!-- Message 1 -->
+                <div class="message-row assistant">
+                    <div class="message-avatar">J</div>
+                    <div class="message-content-group">
+                        <div class="message-sender">Jason</div>
+                        <div class="message-bubble">
+                            Systems online, Sir. Holographic core activated with interconnected node matrix. How may I assist you today?
+                        </div>
+                        <div class="message-timestamp">Just now</div>
+                    </div>
+                </div>
+
+                <!-- Message 2 -->
+                <div class="message-row user">
+                    <div class="message-content-group">
+                        <div class="message-sender">Sir RJ</div>
+                        <div class="message-bubble">
+                            Jason, let's see that cinematic blue globe with rotating particles and connected lines in the center.
+                        </div>
+                        <div class="message-timestamp">Just now</div>
+                    </div>
+                </div>
+
+                <!-- Message 3 -->
+                <div class="message-row assistant">
+                    <div class="message-avatar">J</div>
+                    <div class="message-content-group">
+                        <div class="message-sender">Jason</div>
+                        <div class="message-bubble">
+                            Initializing holographic sphere simulation in the central viewport, Sir. Notice the latitude/longitude grid rings and interconnected particle matrix.
+                        </div>
+                        <div class="message-timestamp">Just now</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Input Bar inside Sidebar -->
+            <div class="chat-input-area">
+                <div class="chat-input-wrapper">
+                    <textarea id="chatInput" placeholder="Command Jason..." rows="1"></textarea>
+                    <button class="send-btn" id="sendBtn" aria-label="Send message">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                    </button>
+                </div>
+                <div class="input-footer-note">Cinematic holographic prototype, Sir.</div>
+            </div>
+        </aside>
+
+        <!-- Center / Right Main Viewport with Three.js Holographic Globe -->
+        <main class="main-viewport">
+            <!-- Header overlay -->
+            <header class="viewport-header">
+                <div class="viewport-title">
+                    <h2>Holographic Core</h2>
+                    <span class="connection-status">
+                        <span class="status-dot"></span> Active Simulation
+                    </span>
+                </div>
+                <div class="viewport-actions">
+                    <button class="theme-toggle-btn" id="themeToggleBtn" aria-label="Toggle theme" title="Switch Theme">
+                        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Three.js Canvas Container -->
+            <div id="globeContainer" class="globe-container">
+                <!-- HUD Overlays -->
+                <div class="hud-overlay hud-top-left">
+                    <span class="hud-label">SYSTEM</span>
+                    <span class="hud-value">J.A.R.V.I.S. MK-VII</span>
+                </div>
+                <div class="hud-overlay hud-top-right">
+                    <span class="hud-label">STATUS</span>
+                    <span class="hud-value glow-text">ONLINE</span>
+                </div>
+                <div class="hud-overlay hud-bottom-left">
+                    <span class="hud-label">CORE TEMP</span>
+                    <span class="hud-value">34.2 °C</span>
+                </div>
+                <div class="hud-overlay hud-bottom-right">
+                    <span class="hud-label">ENCRYPTION</span>
+                    <span class="hud-value">SECURE-256</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>

@@ -233,7 +233,8 @@ async function localToolsAgent(prompt, systemInstruction, provider) {
         "write_project_file",
         "edit_project_file",
         "append_project_file",
-        "create_folder_directory"
+        "create_folder_directory",
+        "open_web_page"
     ]);
 
     const history = [

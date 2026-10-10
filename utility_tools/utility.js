@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 
 export function calculator(expression) {
     if (typeof expression !== "string" || expression.trim() === "") {
@@ -164,5 +165,48 @@ export async function searchWeb(query, maxResults = 5) {
             content: result.content,
             publishedDate: result.published_date || null
         }))
+    };
+}
+
+export function openWebPage(url) {
+    if (typeof url !== "string" || url.trim() === "") {
+        throw new Error("A webpage URL is required.");
+    }
+
+    let parsedUrl;
+
+    try {
+        parsedUrl = new URL(url.trim());
+    } catch {
+        throw new Error("The webpage URL is invalid.");
+    }
+
+    if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+        throw new Error("Only http and https URLs can be opened.");
+    }
+
+    const safeUrl = parsedUrl.href;
+
+    if (process.platform === "win32") {
+        spawn("cmd.exe", ["/c", "start", "", safeUrl], {
+            detached: true,
+            stdio: "ignore"
+        }).unref();
+    } else if (process.platform === "darwin") {
+        spawn("open", [safeUrl], {
+            detached: true,
+            stdio: "ignore"
+        }).unref();
+    } else {
+        spawn("xdg-open", [safeUrl], {
+            detached: true,
+            stdio: "ignore"
+        }).unref();
+    }
+
+    return {
+        ok: true,
+        url: safeUrl,
+        message: "The webpage was opened in the default browser."
     };
 }
