@@ -7,10 +7,28 @@ function historyToGemini(history) {
         const message = history[index];
 
         if (message.role === "user") {
+            const parts = Array.isArray(message.content)
+                ? message.content.map(part => {
+                    if (part.type === "image") {
+                        return {
+                            inlineData: {
+                                mimeType: part.mimeType,
+                                data: part.data
+                            }
+                        };
+                    }
+
+                    return {
+                        text: part.text
+                    };
+                })
+                : [{ text: message.content }];
+
             contents.push({
                 role: "user",
-                parts: [{ text: message.content }]
+                parts
             });
+
             continue;
         }
 

@@ -86,12 +86,18 @@ export function buildSummary(messages) {
         .slice(0, 500);
 }
 
-export function updateShortTermMemory(role, content) {
-    shortTermMemory.messages.push({
+export function updateShortTermMemory(role, content, metadata={}) {
+    const message = {
         role,
         content,
         timestamp: new Date().toISOString()
-    });
+    };
+
+    if (metadata.image) {
+        message.image = metadata.image;
+    }
+
+    shortTermMemory.messages.push(message);
 
     if (shortTermMemory.messages.length > MAX_SHORT_TERM_MESSAGES) {
         shortTermMemory.messages =

@@ -142,12 +142,28 @@ body {
 /* Chat Messages Stream inside Sidebar */
 .chat-messages {
     flex: 1;
-    padding: 20px;
+    padding: 24px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 18px;
+    gap: 22px;
     scroll-behavior: smooth;
+    /* Custom themed scrollbar for conversation UI */
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-primary) var(--bg-secondary);
+}
+
+.chat-messages::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+    background: var(--bg-secondary);
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+    background-color: var(--accent-primary);
+    border-radius: 4px;
 }
 
 .message-row {
@@ -200,8 +216,10 @@ body {
 .message-content-group {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 6px;
+    width: fit-content;
     max-width: calc(100% - 42px);
+    min-width: 0;
 }
 
 .message-row.user .message-content-group {
@@ -209,18 +227,20 @@ body {
 }
 
 .message-sender {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: var(--text-secondary);
-    padding: 0 2px;
+    padding: 0 4px;
+    letter-spacing: 0.03em;
 }
 
 .message-bubble {
-    padding: 12px 16px;
+    padding: 14px 18px;
     border-radius: 12px;
-    font-size: 0.9rem;
-    line-height: 1.45;
+    font-size: 0.92rem;
+    line-height: 1.6;
     word-break: break-word;
+    overflow-wrap: anywhere;
     box-shadow: var(--shadow-sm);
 }
 
@@ -239,9 +259,9 @@ body {
 }
 
 .message-timestamp {
-    font-size: 0.6rem;
+    font-size: 0.65rem;
     color: var(--text-muted);
-    padding: 0 2px;
+    padding: 0 4px;
 }
 
 /* Chat Input Area inside Sidebar */
@@ -268,6 +288,19 @@ body {
     box-shadow: 0 0 12px rgba(0, 240, 255, 0.25);
 }
 
+/* Listening (typing) visual for input wrapper */
+.chat-input-wrapper.listening {
+    border-color: var(--accent-primary);
+    box-shadow: 0 0 18px rgba(0, 240, 255, 0.35);
+    animation: inputPulse 1s ease-in-out infinite;
+}
+@keyframes inputPulse {
+    0% { box-shadow: 0 0 8px rgba(0, 240, 255, 0.18); }
+    50% { box-shadow: 0 0 22px rgba(0, 240, 255, 0.32); }
+    100% { box-shadow: 0 0 8px rgba(0, 240, 255, 0.18); }
+}
+
+.chat-wrapper-placeholder { /* spacer */ }
 .chat-input-wrapper textarea {
     flex: 1;
     background: none;
@@ -279,7 +312,14 @@ body {
     max-height: 120px;
     outline: none;
     padding: 4px 0;
-    line-height: 1.4;
+    line-height: 1.55;
+    /* Custom scrollbar: hidden scrollbar for the text input while retaining scrollability */
+    scrollbar-width: none; /* Firefox */
+    -ms-overflow-style: none; /* IE and Edge */
+}
+
+.chat-input-wrapper textarea::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, Opera */
 }
 
 .chat-input-wrapper textarea::placeholder {
@@ -330,7 +370,8 @@ body {
     height: 100%;
     position: relative;
     background-color: var(--bg-primary);
-    overflow: hidden;
+    overflow: visible; /* allow glow to extend beyond bounds */
+    pointer-events: auto;
 }
 
 .viewport-header {
@@ -409,6 +450,32 @@ body {
     height: 100%;
 }
 
+/* small state HUD */
+.hud-state {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 12px;
+    background: rgba(3,6,12,0.65);
+    border: 1px solid var(--border-color);
+    color: var(--accent-primary);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    border-radius: 6px;
+    z-index: 7;
+    pointer-events: none;
+    box-shadow: 0 0 10px rgba(0,240,255,0.15);
+    transition: color 0.6s ease, border-color 0.6s ease, box-shadow 0.6s ease;
+}
+
+.hud-state.thinking {
+    color: #ff2d55;
+    border-color: rgba(255, 45, 85, 0.4);
+    box-shadow: 0 0 16px rgba(255, 45, 85, 0.35);
+}
+
 /* HUD Sci-Fi Overlays */
 .hud-overlay {
     position: absolute;
@@ -449,23 +516,221 @@ body {
 }
 
 /* Responsive Design */
-@media (max-width: 900px) {
+@media (max-width: 1080px) {
+    /* Stack for tall/narrow screens (phones / small tablets) */
     .app-container {
         flex-direction: column-reverse;
     }
-    
+
+    /* Sidebar becomes a bottom sheet-like panel with comfortable height */
     .sidebar {
         width: 100%;
-        height: 50%;
+        height: 52vh;
         border-right: none;
         border-top: 1px solid var(--border-color);
     }
-    
+
+    /* Main viewport gets the remaining height */
     .main-viewport {
-        height: 50%;
+        height: calc(48vh);
     }
-    
+
+    /* Hide dense HUD overlays on small screens */
     .hud-overlay {
         display: none;
     }
+
+    /* Allow page scrolling on mobile so long chat histories are reachable */
+    body {
+        overflow: auto;
+    }
+
+    /* Improve touch scrolling momentum on iOS */
+    .chat-messages {
+        -webkit-overflow-scrolling: touch;
+        padding: 16px;
+    }
+
+    /* Slightly larger touch targets and relaxed padding */
+    .sidebar-header { padding: 14px; }
+    .chat-input-area { padding: 12px; }
+    .attach-btn, .send-btn { width: 40px; height: 40px; }
+
+    /* Ensure readable text on smaller widths */
+    .message-bubble { font-size: 0.95rem; }
+}
+
+
+/* Hide image attachment container when [hidden] (explicit to prevent accidental override) */
+.image-attachment[hidden] { display: none !important; }
+
+.image-attachment {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--surface);
+    border-radius: 10px;
+    box-shadow: 0 6px 18px rgba(0,240,255,0.06);
+}
+
+.image-preview {
+    width: 72px;
+    height: 72px;
+    object-fit: cover;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,240,255,0.08);
+}
+
+.remove-image-button {
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+    color: var(--text-primary);
+    background: var(--surface-hover);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    line-height: 0;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+    transition: transform 0.12s ease, background 0.12s ease;
+}
+.remove-image-button:hover {
+    transform: scale(1.06);
+    background: linear-gradient(135deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));
+}
+
+.attach-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, rgba(0,240,255,0.08), rgba(0,180,220,0.06));
+    border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-primary);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    box-shadow: 0 0 10px rgba(0,240,255,0.06);
+    flex-shrink: 0;
+}
+
+.attach-btn svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+}
+
+.attach-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,240,255,0.12);
+    border-color: rgba(0,240,255,0.16);
+}
+
+.attach-btn.has-image {
+    background: linear-gradient(135deg, #00f0ff, #0077ff);
+    color: var(--accent-text);
+    box-shadow: 0 6px 24px rgba(0,240,255,0.28);
+}
+
+.message-image {
+    display: block;
+    width: min(220px, 100%);
+    max-height: 220px;
+    object-fit: cover;
+    margin-bottom: 8px;
+    border-radius: 8px;
+}
+
+/* ========================================================
+   CINEMATIC & TECHNOLOGICAL UPGRADES (Idea 2: Holographic Data-Scan Sweep)
+   ======================================================== */
+
+.main-viewport::after-scan {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 4;
+    background: 
+        radial-gradient(circle at center, transparent 40%, rgba(2, 4, 10, 0.55) 90%),
+        repeating-linear-gradient(rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 3px, rgba(0, 240, 255, 0.012) 3px, rgba(0, 240, 255, 0.012) 4px);
+}
+
+/* common glow base for top, right, bottom */
+#viewport::before,
+#viewport::after,
+#viewport .glow-bottom {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  z-index: 10;
+  opacity: 0;
+  filter: blur(12px);
+  will-change: opacity, transform, filter;
+  /* Keep the animation assigned at all times but paused by default.
+     This prevents the browser from recreating/ restarting the animation
+     when the .thinking class is toggled. We only toggle play-state. */
+  animation: cinematicGlowOnOff 4.5s ease-in-out infinite;
+  animation-fill-mode: both;
+  animation-direction: alternate;
+  animation-play-state: paused;
+}
+
+/* TOP - full width across the top edge (using top: -9px so it aligns perfectly on the top border) */
+#viewport::before {
+  top: -9px;
+  left: 0;
+  right: 0;
+  height: 18px;
+  background: linear-gradient(180deg, rgba(0,255,246,0.95) 0%, rgba(0,255,246,0) 70%);
+}
+
+/* RIGHT - full height along the right edge */
+#viewport::after {
+  top: 0;
+  right: -9px;
+  bottom: 0;
+  width: 18px;
+  background: linear-gradient(270deg, rgba(0,255,246,0.95) 0%, rgba(0,255,246,0) 70%);
+}
+
+/* BOTTOM - full width across the bottom edge (element inside #viewport) */
+#viewport .glow-bottom {
+  left: 0;
+  right: 0;
+  bottom: -9px;
+  height: 18px;
+  background: linear-gradient(0deg, rgba(0,255,246,0.95) 0%, rgba(0,255,246,0) 70%);
+}
+
+/* Thinking state: toggle play-state instead of reassigning animation */
+#viewport.thinking::before,
+#viewport.thinking::after,
+#viewport.thinking .glow-bottom {
+  animation-play-state: running;
+}
+
+/* slow on/off pulse with continuous infinite looping */
+@keyframes cinematicGlowOnOff {
+  0%   { opacity: 0.12; filter: blur(10px); transform: translate3d(0,0,0) scale(1); }
+  50%  { opacity: 0.95; filter: blur(16px); transform: translate3d(0,0,0) scale(1.015); }
+  100% { opacity: 0.12; filter: blur(10px); transform: translate3d(0,0,0) scale(1); }
+}
+
+.globe-container[data-state="thinking"] ~ .viewport-header .status-dot,
+.main-viewport:has(.globe-container[data-state="thinking"]) .status-dot {
+    background-color: #ff2d55;
+    box-shadow: 0 0 12px #ff2d55;
+}
+
+.globe-container[data-state="listening"] ~ .viewport-header .status-dot,
+.main-viewport:has(.globe-container[data-state="listening"]) .status-dot {
+    background-color: #00f0ff;
+    box-shadow: 0 0 12px #00f0ff;
 }

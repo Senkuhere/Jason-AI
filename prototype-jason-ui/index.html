@@ -19,53 +19,48 @@
                 <div class="brand">
                     <div class="brand-avatar">J</div>
                     <div class="brand-info">
-                        <span class="brand-title">J.A.R.V.I.S. / Jason</span>
-                        <span class="brand-subtitle">Cinematic AI Interface</span>
+                        <span class="brand-title">Jason</span>
+                        <span class="brand-subtitle">AI Interface</span>
                     </div>
                 </div>
             </div>
 
             <!-- Messages Stream in Sidebar -->
             <div class="chat-messages" id="chatMessages">
-                <!-- Message 1 -->
-                <div class="message-row assistant">
-                    <div class="message-avatar">J</div>
-                    <div class="message-content-group">
-                        <div class="message-sender">Jason</div>
-                        <div class="message-bubble">
-                            Systems online, Sir. Holographic core activated with interconnected node matrix. How may I assist you today?
-                        </div>
-                        <div class="message-timestamp">Just now</div>
-                    </div>
-                </div>
-
-                <!-- Message 2 -->
-                <div class="message-row user">
-                    <div class="message-content-group">
-                        <div class="message-sender">Sir RJ</div>
-                        <div class="message-bubble">
-                            Jason, let's see that cinematic blue globe with rotating particles and connected lines in the center.
-                        </div>
-                        <div class="message-timestamp">Just now</div>
-                    </div>
-                </div>
-
-                <!-- Message 3 -->
-                <div class="message-row assistant">
-                    <div class="message-avatar">J</div>
-                    <div class="message-content-group">
-                        <div class="message-sender">Jason</div>
-                        <div class="message-bubble">
-                            Initializing holographic sphere simulation in the central viewport, Sir. Notice the latitude/longitude grid rings and interconnected particle matrix.
-                        </div>
-                        <div class="message-timestamp">Just now</div>
-                    </div>
-                </div>
+                
             </div>
 
             <!-- Input Bar inside Sidebar -->
             <div class="chat-input-area">
+                <div
+                    id="imageAttachment"
+                    class="image-attachment"
+                    hidden
+                >
+                    <img
+                        id="imagePreview"
+                        class="image-preview"
+                        alt="Selected image"
+                    >
+
+                    <button
+                        id="removeImageButton"
+                        class="remove-image-button"
+                        type="button"
+                        aria-label="Remove selected image"
+                        title="Remove image"
+                    >
+                        ×
+                    </button>
+                </div>
                 <div class="chat-input-wrapper">
+                    <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp" hidden>
+                    <button class="attach-btn" id="imageButton" type="button" aria-label="Attach image" title="Attach image">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                    </button>
                     <textarea id="chatInput" placeholder="Command Jason..." rows="1"></textarea>
                     <button class="send-btn" id="sendBtn" aria-label="Send message">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
@@ -76,7 +71,7 @@
         </aside>
 
         <!-- Center / Right Main Viewport with Three.js Holographic Globe -->
-        <main class="main-viewport">
+        <main class="main-viewport" id="viewport">
             <!-- Header overlay -->
             <header class="viewport-header">
                 <div class="viewport-title">
@@ -107,10 +102,11 @@
 
             <!-- Three.js Canvas Container -->
             <div id="globeContainer" class="globe-container">
+                <div id="globeStateLabel" class="hud-state">IDLE</div>
                 <!-- HUD Overlays -->
                 <div class="hud-overlay hud-top-left">
                     <span class="hud-label">SYSTEM</span>
-                    <span class="hud-value">J.A.R.V.I.S. MK-VII</span>
+                    <span class="hud-value">JASON MATRIX V2</span>
                 </div>
                 <div class="hud-overlay hud-top-right">
                     <span class="hud-label">STATUS</span>
@@ -125,6 +121,9 @@
                     <span class="hud-value">SECURE-256</span>
                 </div>
             </div>
+
+            <!-- Bottom glow element inside viewport -->
+            <div class="glow-bottom"></div>
         </main>
     </div>
 

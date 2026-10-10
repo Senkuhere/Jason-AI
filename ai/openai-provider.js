@@ -53,9 +53,29 @@ function historyToOpenAI(history, systemInstruction) {
 
     for (const message of history) {
         if (message.role === "user") {
+            const content = Array.isArray(message.content)
+                ? message.content.map(part => {
+                    if (part.type === "image") {
+                        return {
+                            type: "image_url",
+                            image_url: {
+                                url:
+                                    `data:${part.mimeType};base64,` +
+                                    part.data
+                            }
+                        };
+                    }
+
+                    return {
+                        type: "text",
+                        text: part.text
+                    };
+                })
+                : message.content;
+
             messages.push({
                 role: "user",
-                content: message.content
+                content
             });
         }
 

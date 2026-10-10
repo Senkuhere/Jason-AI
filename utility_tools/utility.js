@@ -121,37 +121,67 @@ export async function getWeather(query) {
     };
 }
 export async function searchWeb(query, maxResults = 5) {
-    if (typeof query !== "string" || query.trim().length < 2) {
+    if (
+        typeof query !== "string" ||
+        query.trim().length < 2
+    ) {
         throw new Error("A search query is required.");
     }
 
     const apiKey = process.env.TAVILY_API_KEY;
 
     if (!apiKey) {
-        throw new Error("TAVILY_API_KEY is not configured.");
+        throw new Error(
+            "TAVILY_API_KEY is not configured."
+        );
     }
 
-    const response = await fetch("https://api.tavily.com/search", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-            api_key: apiKey,
-            query: query.trim(),
-            search_depth: "advanced",
-            topic: "general",
-            max_results: Math.min(Math.max(maxResults, 1), 10),
-            include_answer: true,
-            include_raw_content: false
-        })
-    });
+    const safeMaxResults = Number.isFinite(Number(maxResults))
+        ? Math.min(Math.max(Number(maxResults), 1), 10)
+        : 5;
 
-    const data = await response.json();
+    const response = await fetch(
+        "https://api.tavily.com/search",
+        {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                api_key: apiKey,
+                query: query.trim(),
+                search_depth: "advanced",
+                topic: "general",
+                max_results: safeMaxResults,
+                include_answer: true,
+                include_raw_content: false
+            }),
+            signal: AbortSignal.timeout(15000)
+        }
+    );
+
+    const rawBody = await response.text();
+
+    let data;
+
+    try {
+        data = rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+        data = {
+            message: rawBody
+        };
+    }
 
     if (!response.ok) {
+        const errorDetails =
+            typeof data.detail === "string"
+                ? data.detail
+                : data.detail
+                    ? JSON.stringify(data.detail)
+                    : data.message || "Unknown Tavily error.";
+
         throw new Error(
-            data?.detail || data?.message || "Web search failed."
+            `Tavily returned ${response.status}: ${errorDetails}`
         );
     }
 
