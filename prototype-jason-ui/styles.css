@@ -264,6 +264,153 @@ body {
     padding: 0 4px;
 }
 
+.attach-menu {
+    position: fixed;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    min-width: 140px;
+    padding: 6px;
+    border-radius: 10px;
+    border: 1px solid rgba(127, 127, 127, 0.35);
+    background: #1f2430;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.attach-menu[hidden] { display: none; }
+
+.attach-menu button {
+    padding: 8px 12px;
+    text-align: left;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+}
+
+.attach-menu button:hover { background: rgba(127, 127, 127, 0.25); }
+
+.file-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    margin: 0 0 6px;
+    padding: 4px 10px;
+    font-size: 13px;
+    border-radius: 999px;
+    border: 1px solid rgba(127, 127, 127, 0.35);
+    background: rgba(127, 127, 127, 0.15);
+}
+.file-chip[hidden] { display: none; }
+.file-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.file-chip button {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+}
+
+.attachment-tray {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 0 8px;
+}
+.attachment-tray[hidden] { display: none; }
+
+.attachment-item { position: relative; }
+.attachment-image img {
+    display: block;
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid rgba(127, 127, 127, 0.35);
+}
+.attachment-image button {
+    position: absolute;
+    top: -6px;
+    right: -6px;
+    width: 20px;
+    height: 20px;
+    border: none;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.message-images {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.message-images .message-image {
+    max-width: 160px;
+    max-height: 160px;
+    object-fit: cover;
+    border-radius: 8px;
+}
+
+.typing-indicator {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    align-self: flex-start;
+    width: fit-content;
+    padding: 12px 15px;
+    margin: 0 24px 12px;
+    background: var(--bubble-assistant);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+}
+
+.typing-indicator[hidden] {
+    display: none;
+}
+.typing-indicator {
+    position: relative;
+    z-index: 100;
+    outline: 1px solid rgb(1, 116, 164);
+}
+.typing-indicator span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent-primary);
+    animation: typingBounce 1.2s infinite ease-in-out;
+}
+
+.typing-indicator span:nth-child(2) {
+    animation-delay: 0.15s;
+}
+
+.typing-indicator span:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+@keyframes typingBounce {
+    0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.45;
+    }
+
+    30% {
+        transform: translateY(-6px);
+        opacity: 1;
+    }
+}
+
 /* Chat Input Area inside Sidebar */
 .chat-input-area {
     padding: 16px 20px;
@@ -301,6 +448,7 @@ body {
 }
 
 .chat-wrapper-placeholder { /* spacer */ }
+
 .chat-input-wrapper textarea {
     flex: 1;
     background: none;
@@ -522,17 +670,27 @@ body {
         flex-direction: column-reverse;
     }
 
-    /* Sidebar becomes a bottom sheet-like panel with comfortable height */
+    /* Sidebar becomes a fixed bottom sheet so transforms don't affect page flow */
     .sidebar {
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
         width: 100%;
-        height: 52vh;
+        height: 90vh;
+        max-height: 95dvh;
         border-right: none;
         border-top: 1px solid var(--border-color);
+        z-index: 40;
+        box-shadow: var(--shadow-lg);
+        transform: translateY(0);
+        will-change: transform;
     }
 
-    /* Main viewport gets the remaining height */
+    /* Main viewport reserves space equal to the collapsed panel visible area (220px)
+       so the globe remains visually connected when the panel is collapsed. */
     .main-viewport {
-        height: calc(48vh);
+        height: calc(100dvh - 220px);
     }
 
     /* Hide dense HUD overlays on small screens */
@@ -540,9 +698,9 @@ body {
         display: none;
     }
 
-    /* Allow page scrolling on mobile so long chat histories are reachable */
+    /* Prevent the body from scrolling — the chat panel handles its own scroll */
     body {
-        overflow: auto;
+        overflow: hidden;
     }
 
     /* Improve touch scrolling momentum on iOS */
@@ -733,4 +891,71 @@ body {
 .main-viewport:has(.globe-container[data-state="listening"]) .status-dot {
     background-color: #00f0ff;
     box-shadow: 0 0 12px #00f0ff;
+}
+
+/* ========================================================
+   MOBILE DRAG HANDLE & PANEL STYLES (prototype-jason-ui)
+   ======================================================== */
+
+.chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  height: 36px;
+  border-radius: 16px 16px 0 0;
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--border-color);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+  border-top-left-radius: 16px;
+  border-top-right-radius: 16px;
+  flex-shrink: 0;
+}
+
+.chat-header:active {
+  cursor: grabbing;
+}
+
+.drag-handle {
+  width: 44px;
+  height: 5px;
+  background-color: var(--text-muted);
+  border-radius: 3px;
+  opacity: 0.6;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.chat-header:hover .drag-handle {
+  opacity: 0.9;
+  background-color: var(--accent-primary);
+}
+
+.chat-title {
+  position: absolute;
+  left: 16px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: cyan;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+@media (min-width: 1080px) {
+  .chat-header {
+    display: none;
+  }
+}
+/* Screen-reader status element */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
 }

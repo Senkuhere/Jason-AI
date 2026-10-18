@@ -29,10 +29,25 @@ function chat() {
             console.log("Jason is offline.");
             process.exit(0);
         }
-
         try {
             const result = await sendMessage(trimmedMessage, {
+                onApproval({ name, preview }) {
+                    console.log(`\nJason wants to ${preview?.description ?? name}`);
+
+                    if (preview?.code) {
+                        console.log("--- script ---");
+                        console.log(preview.code);
+                        console.log("--- end ---");
+                    }
+
+                    return new Promise(resolve => {
+                        rl.question("Allow? (y/N) ", answer =>
+                            resolve(answer.trim().toLowerCase() === "y")
+                        );
+                    });
+                },
                 onEvent(event) {
+                    
                     if (event.type === "provider_selected") {
                         console.log(
                             `Selected provider: ${event.name}`

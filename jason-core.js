@@ -24,6 +24,8 @@ import {
 
 import { getProviderForRequest } from "./ai/providers.js";
 
+import { logCapability } from "./capability-logger.js";
+
 const MAX_AGENT_STEPS = 15;
 const MAX_TOOL_CALLS_PER_STEP = 8;
 
@@ -218,7 +220,7 @@ ${userMessage}
 `;
 
     const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-3.1-flash-lite",
         contents: evaluationPrompt
     });
 
@@ -229,27 +231,52 @@ function getToolCallKey(name, args) {
     return `${name}:${JSON.stringify(args ?? {})}`;
 }
 
+async function requestApproval(name, args, onApproval) {
+    if (!requiresApproval(name)) {
+        return { approved: true, context: {} };
+    }
+
+    const prepared = await prepareCapability(name, args);
+
+    if (!onApproval) {
+        return {
+            approved: false,
+            reason: "No approval handler is available, so the action was not run."
+        };
+    }
+
+    const approved = await onApproval({
+        name,
+        args,
+        preview: prepared.preview
+    });
+
+    return approved
+        ? { approved: true, context: prepared.context }
+        : { approved: false, reason: "The user declined this action." };
+}
+
 async function runAgent(
     prompt,
     systemInstruction,
     provider,
-    image = null,
+    images = [],
     onEvent = () => {}
 ) {
     const failedCalls = new Set();
     const completedCalls = new Map();
 
-    const userContent = image
+    const userContent = images.length > 0
     ? [
         {
             type: "text",
             text: prompt
         },
-        {
+        ...images.map(image => ({
             type: "image",
             mimeType: image.mimeType,
             data: image.data
-        }
+        }))
     ]
     : prompt;
 
@@ -272,7 +299,7 @@ async function runAgent(
             });
         } catch (error) {
             const failure = describeError(error);
-
+            
             onEvent({
                 type: "provider_failed",
                 errorType: failure.name,
@@ -342,6 +369,8 @@ async function runAgent(
                     completedCalls.clear();
                 }
 
+                const startedAt = Date.now();
+                
                 try {
                     onEvent({
                         type: "tool_started",
@@ -354,6 +383,24 @@ async function runAgent(
                         functionCall.name,
                         args
                     );
+
+                    const durationMs = Date.now() - startedAt;
+                    const succeeded = result?.ok !== false;
+                    
+                    void logCapability({
+                        capabilityName: functionCall.name,
+                        args,
+                        status: succeeded ? "success" : "error",
+                        result: null,
+                        errorName: succeeded
+                            ? null
+                            : "CapabilityReturnedError",
+                        errorMessage: succeeded
+                            ? null
+                            : result?.error || "Capability returned ok: false",
+                        durationMs,
+                        agentStep: step + 1
+                    });
 
                     if (
                         isCacheable(functionCall.name) ||
@@ -373,6 +420,19 @@ async function runAgent(
                     failedCalls.add(callKey);
                     
                     const failure = describeError(error);
+                    const durationMs = Date.now() - startedAt;
+
+                    void logCapability({
+                        capabilityName: functionCall.name,
+                        args,
+                        status: "error",
+                        result: null,
+                        errorName: failure.name,
+                        errorMessage: failure.message,
+                        durationMs,
+                        agentStep: step + 1
+                    });
+
                     result = {
                         ok: false,
                         tool: functionCall.name,
@@ -410,35 +470,44 @@ async function runAgent(
 export async function sendMessage(
     userMessage,
     {
+        images = [],
         image = null,
-        onEvent = () => {}
-    } = {}
+        onEvent = () => {},
+        onApproval = null
+    } = {},
+    
 ) {
+    const imageList =
+        images.length > 0
+            ? images
+            : image
+                ? [image]
+                : [];
     const trimmedMessage =
         typeof userMessage === "string"
             ? userMessage.trim()
             : "";
 
-    if (!trimmedMessage && !image) {
+    if (!trimmedMessage && imageList.length === 0) {
         throw new Error("A message or image is required.");
     }
 
     const effectiveMessage = trimmedMessage ||
-        "Please inspect the attached image.";
+        "Please inspect the attached image(s).";
 
-   const imageReference = image?.id
-        ? {
-            id: image.id,
-            mimeType: image.mimeType,
-            url: image.url
-        }
-        : null;
+   const imageReferences = imageList
+        .filter(item => item.id)
+        .map(item => ({
+            id: item.id,
+            mimeType: item.mimeType,
+            url: item.url
+        }));
 
     updateShortTermMemory(
         "user",
         trimmedMessage || "Image attached for analysis.",
-        imageReference
-            ? { image: imageReference }
+        imageReferences.length > 0
+            ? { images: imageReferences }
             : {}
     );
     
@@ -446,9 +515,17 @@ export async function sendMessage(
 
     if (longTermMemoryAvailable) {
         try {
-            longTermMemories = await getLongTermMemories(
+            const retrievalQuery = [
                 effectiveMessage,
-                5
+                ...shortTermMemory.messages
+                    .filter(message => message.role === "user")
+                    .slice(-3)
+                    .map(message => message.content)
+            ].join(" ");
+
+            longTermMemories = await getLongTermMemories(
+                retrievalQuery,
+                12
             );
         } catch (error) {
             const failure = describeError(error);
@@ -501,7 +578,7 @@ export async function sendMessage(
         prompt,
         systemInstruction,
         selectedProvider.provider,
-        image,
+        imageList,
         onEvent
     );
 

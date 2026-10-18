@@ -98,7 +98,7 @@ function historyToGemini(history) {
 export class GeminiProvider {
     constructor({
         apiKey = process.env.GEMINI_API_KEY,
-        model = "gemini-3.5-flash-lite"
+        model = "gemini-3.1-flash-lite"
     } = {}) {
         this.client = new GoogleGenAI({ apiKey });
         this.model = model;

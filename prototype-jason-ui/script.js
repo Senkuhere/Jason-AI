@@ -6,7 +6,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const imageInput = document.getElementById('imageInput');
     const imageButton = document.getElementById('imageButton');
 
-    let selectedImage = null;
 
     const chatMessages = document.getElementById('chatMessages');
     const globeContainer = document.getElementById('globeContainer');
@@ -15,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const imagePreview = document.getElementById("imagePreview");
     const removeImageButton = document.getElementById("removeImageButton");
 
+    const typingIndicator =document.getElementById("typingIndicator");
     // 1. Theme Switcher Logic
     const savedTheme = localStorage.getItem('jason_ui_theme') || 'dark';
     htmlElement.setAttribute('data-theme', savedTheme);
@@ -47,51 +47,208 @@ document.addEventListener('DOMContentLoaded', () => {
         }, TYPING_TIMEOUT);
     }
 
-    imageButton.addEventListener("click", () => {
+        // ---- Attachments: up to 5 images and 5 files per message ----
+    const MAX_ATTACHMENTS = 5;
+    const MAX_IMAGE_MB = 5;
+    const MAX_FILE_MB = 15;
+    const MAX_TOTAL_MB = 40;
+
+    let selectedImages = [];
+    let selectedFiles = [];
+
+    imageInput.multiple = true;
+
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.multiple = true;
+    fileInput.accept =
+        ".pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt,.md,.json,.html,.css,.js,.py,.xml,.yml,.yaml,.log";
+    fileInput.hidden = true;
+    document.body.appendChild(fileInput);
+
+    // One tray holds image thumbnails and file chips. The old single preview is unused now.
+    const tray = document.createElement("div");
+    tray.className = "attachment-tray";
+    tray.hidden = true;
+    imageAttachment.parentNode.insertBefore(tray, imageAttachment);
+    imageAttachment.hidden = true;
+
+    function attachmentBytes() {
+        return [...selectedImages, ...selectedFiles].reduce(
+            (sum, item) => sum + item.size,
+            0
+        );
+    }
+
+    function makeRemoveButton(onClick) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = "×";
+        button.title = "Remove";
+        button.addEventListener("click", onClick);
+        return button;
+    }
+
+    function renderTray() {
+        tray.textContent = "";
+
+        selectedImages.forEach((image, index) => {
+            const item = document.createElement("div");
+            item.className = "attachment-item attachment-image";
+
+            const thumbnail = document.createElement("img");
+            thumbnail.src = `data:${image.mimeType};base64,${image.data}`;
+            thumbnail.alt = image.name;
+
+            item.append(
+                thumbnail,
+                makeRemoveButton(() => {
+                    selectedImages.splice(index, 1);
+                    renderTray();
+                })
+            );
+            tray.appendChild(item);
+        });
+
+        selectedFiles.forEach((file, index) => {
+            const chip = document.createElement("div");
+            chip.className = "file-chip";
+
+            const name = document.createElement("span");
+            name.textContent = `📎 ${file.name}`;
+
+            chip.append(
+                name,
+                makeRemoveButton(() => {
+                    selectedFiles.splice(index, 1);
+                    renderTray();
+                })
+            );
+            tray.appendChild(chip);
+        });
+
+        const hasAny = selectedImages.length + selectedFiles.length > 0;
+        tray.hidden = !hasAny;
+        imageButton.classList.toggle("has-image", hasAny);
+    }
+
+    // ---- + button menu ----
+    const attachMenu = document.createElement("div");
+    attachMenu.className = "attach-menu";
+    attachMenu.hidden = true;
+
+    const imageOption = document.createElement("button");
+    imageOption.type = "button";
+    imageOption.textContent = "🖼️ Image";
+
+    const fileOption = document.createElement("button");
+    fileOption.type = "button";
+    fileOption.textContent = "📄 File";
+
+    attachMenu.append(imageOption, fileOption);
+    document.body.appendChild(attachMenu);
+
+    function closeAttachMenu() {
+        attachMenu.hidden = true;
+    }
+
+    imageButton.addEventListener("click", event => {
+        event.stopPropagation();
+
+        if (!attachMenu.hidden) {
+            closeAttachMenu();
+            return;
+        }
+
+        const rect = imageButton.getBoundingClientRect();
+        attachMenu.style.left = `${rect.left}px`;
+        attachMenu.style.bottom = `${window.innerHeight - rect.top + 8}px`;
+        attachMenu.hidden = false;
+    });
+
+    imageOption.addEventListener("click", () => {
+        closeAttachMenu();
         imageInput.click();
     });
 
-    imageInput.addEventListener("change", async () => {
-        const file = imageInput.files[0];
-        if (!file) return;
-
-        const allowedTypes = ["image/png", "image/jpeg", "image/webp"];
-        if (!allowedTypes.includes(file.type)) {
-            imageInput.value = "";
-            selectedImage = null;
-            imageButton.title = "Only PNG, JPEG, and WebP images are supported.";
-            return;
-        }
-
-        if (file.size > 10 * 1024 * 1024) {
-            imageInput.value = "";
-            selectedImage = null;
-            imageButton.title = "Images must be smaller than 10 MB.";
-            return;
-        }
-
-        const dataUrl = await readFileAsDataUrl(file);
-        const base64Data = dataUrl.split(",")[1];
-
-        selectedImage = {
-            mimeType: file.type,
-            data: base64Data,
-            name: file.name
-        };
-
-        imagePreview.src = dataUrl;
-        imageAttachment.hidden = false;
-        imageButton.title = `Attached: ${file.name}`;
-        imageButton.classList.add("has-image");
+    fileOption.addEventListener("click", () => {
+        closeAttachMenu();
+        fileInput.click();
     });
 
-    removeImageButton.addEventListener("click", () => {
+    document.addEventListener("click", closeAttachMenu);
+
+    // ---- Picking images ----
+    imageInput.addEventListener("change", async () => {
+        const picked = [...imageInput.files];
         imageInput.value = "";
-        selectedImage = null;
-        imagePreview.removeAttribute("src");
-        imageAttachment.hidden = true;
-        imageButton.title = "Attach image";
-        imageButton.classList.remove("has-image");
+
+        for (const file of picked) {
+            if (selectedImages.length >= MAX_ATTACHMENTS) {
+                appendMessage("assistant", `You can attach up to ${MAX_ATTACHMENTS} images per message.`);
+                break;
+            }
+
+            if (!["image/png", "image/jpeg", "image/webp"].includes(file.type)) {
+                appendMessage("assistant", `${file.name}: only PNG, JPEG, and WebP images are supported.`);
+                continue;
+            }
+
+            if (file.size > MAX_IMAGE_MB * 1024 * 1024) {
+                appendMessage("assistant", `${file.name} is larger than ${MAX_IMAGE_MB} MB.`);
+                continue;
+            }
+
+            if (attachmentBytes() + file.size > MAX_TOTAL_MB * 1024 * 1024) {
+                appendMessage("assistant", `Attachments can total up to ${MAX_TOTAL_MB} MB per message.`);
+                break;
+            }
+
+            const dataUrl = await readFileAsDataUrl(file);
+
+            selectedImages.push({
+                name: file.name,
+                mimeType: file.type,
+                data: dataUrl.split(",")[1],
+                size: file.size
+            });
+        }
+
+        renderTray();
+    });
+
+    // ---- Picking files ----
+    fileInput.addEventListener("change", async () => {
+        const picked = [...fileInput.files];
+        fileInput.value = "";
+
+        for (const file of picked) {
+            if (selectedFiles.length >= MAX_ATTACHMENTS) {
+                appendMessage("assistant", `You can attach up to ${MAX_ATTACHMENTS} files per message.`);
+                break;
+            }
+
+            if (file.size > MAX_FILE_MB * 1024 * 1024) {
+                appendMessage("assistant", `${file.name} is larger than ${MAX_FILE_MB} MB.`);
+                continue;
+            }
+
+            if (attachmentBytes() + file.size > MAX_TOTAL_MB * 1024 * 1024) {
+                appendMessage("assistant", `Attachments can total up to ${MAX_TOTAL_MB} MB per message.`);
+                break;
+            }
+
+            const dataUrl = await readFileAsDataUrl(file);
+
+            selectedFiles.push({
+                name: file.name,
+                mimeType: file.type || "application/octet-stream",
+                data: dataUrl.split(",")[1],
+                size: file.size
+            });
+        }
+
+        renderTray();
     });
 
     function readFileAsDataUrl(file) {
@@ -122,8 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const message of data.messages || []) {
                 appendMessage(
                     message.role,
-                    message.content,
-                    message.image ||null,
+                    String(message.content ?? "")
+                        .replace(/\n*\[Attached file: "([^"]+)"[^\]]*\]/g, "\n📎 $1")
+                        .trim(),
+                    message.images || message.image ||null,
                     message.timestamp
                 );
             }
@@ -139,21 +298,38 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 3. Send Message Interaction (Frontend Prototype Mock)
     async function handleSendMessage() {
+        console.log("handleSendMessage called");
         const text = chatInput.value.trim();
-        if ((!text && !selectedImage) || sendBtn.disabled) {
+        const hasAttachments =
+            selectedImages.length > 0 || selectedFiles.length > 0;
+
+        if ((!text && !hasAttachments) || sendBtn.disabled) {
             return;
         }
-        const imageToSend = selectedImage;
-        appendMessage("user", text, imageToSend);
+
+        const imagesToSend = selectedImages.map(
+            ({ name, mimeType, data }) => ({ name, mimeType, data })
+        );
+        const filesToSend = selectedFiles.map(
+            ({ name, mimeType, data }) => ({ name, mimeType, data })
+        );
+
+        const fileLines = filesToSend
+            .map(file => `📎 ${file.name}`)
+            .join("\n");
+
+        appendMessage(
+            "user",
+            [text, fileLines].filter(Boolean).join("\n"),
+            imagesToSend
+        );
+
+        selectedImages = [];
+        selectedFiles = [];
+        renderTray();
 
         chatInput.value = "";
         chatInput.style.height = "auto";
-        imageInput.value = "";
-        selectedImage = null;
-        imagePreview.removeAttribute("src");
-        imageAttachment.hidden = true;
-        imageButton.title = "Attach image";
-        imageButton.classList.remove("has-image");
         sendBtn.disabled = true;
         sendBtn.setAttribute("aria-busy", "true");
 
@@ -165,7 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             setGlobeState('thinking', 0.4);
         }, 300);
+        await new Promise(resolve => setTimeout(resolve, 700));
 
+        setTypingIndicator(true);
         try {
             const response = await fetch("/api/chat", {
                 method: "POST",
@@ -174,7 +352,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({
                     message: text,
-                    image: imageToSend
+                    images: imagesToSend,
+                    files: filesToSend
                 })
             });
 
@@ -192,13 +371,14 @@ document.addEventListener('DOMContentLoaded', () => {
             appendMessage("assistant", `Connection error: ${error.message}`);
             setGlobeState('idle', 0.5);
         } finally {
+            setTypingIndicator(false);
             sendBtn.disabled = false;
             sendBtn.removeAttribute("aria-busy");
             chatInput.focus();
         }
     }
 
-    function appendMessage(role, text, image = null, timestamp = null) {
+    function appendMessage(role, text, images = null, timestamp = null) {
         const row = document.createElement("div");
         row.className = `message-row ${role}`;
 
@@ -210,17 +390,24 @@ document.addEventListener('DOMContentLoaded', () => {
         const userAvatar = role === "user" ? avatar : "";
         const assistantAvatar = role === "assistant" ? avatar : "";
 
-        const imageMarkup = image
-            ? `
+        // Create a list of images to display
+        const imageList = Array.isArray(images)
+            ? images
+            : images
+                ? [images]
+                : [];
+
+        const imageMarkup = imageList.length
+            ? `<div class="message-images">${imageList
+                .map(
+                    image => `
                 <img
                     class="message-image"
-                    src="${
-                        image.url ||
-                        `data:${image.mimeType};base64,${image.data}`
-                    }"
+                    src="${image.url || `data:${image.mimeType};base64,${image.data}`}"
                     alt="User attached image"
-                >
-            `
+                >`
+                )
+                .join("")}</div>`
             : "";
 
         const displayTime = timestamp
@@ -232,14 +419,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 hour: "2-digit",
                 minute: "2-digit"
             });
-        
+        const formatted = escapeHtml(text).replace(/\n/g, "<br>");
         row.innerHTML = `
             ${assistantAvatar}
             <div class="message-content-group">
                 <div class="message-sender">${sender}</div>
                 <div class="message-bubble">
                     ${imageMarkup}
-                    ${text ? `<div>${escapeHtml(text)}</div>` : ""}
+                    ${text ? `<div>${formatted}</div>` : ""}
                 </div>
                 <div class="message-timestamp">
                     ${displayTime}
@@ -388,6 +575,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 viewportEl.classList.remove('thinking');
             }
         }
+
+        // Update screen-reader status for processing announcement (aria-live polite)
+        try {
+            const statusEl = document.getElementById('processingStatus');
+            if (statusEl) {
+                if (state === 'thinking') {
+                    statusEl.textContent = 'Processing';
+                } else {
+                    // Clear the polite live region so it doesn't keep announcing
+                    statusEl.textContent = '';
+                }
+            }
+        } catch (e) {
+            // don't let a failure here break the UI
+            console.warn('processingStatus update failed', e);
+        }
+    }
+
+    function setTypingIndicator(visible) {
+        console.log("Typing indicator:", visible);
+        if (!typingIndicator) {
+            console.warn("Typing indicator element not found.");
+            return;
+        }
+
+        typingIndicator.hidden = !visible;
+
+        if (visible) {
+            chatMessages.appendChild(typingIndicator);
+            scrollToBottom();
+        }
     }
 
     function lerp(a, b, t) { return a + (b - a) * t; }
@@ -406,7 +624,7 @@ document.addEventListener('DOMContentLoaded', () => {
             0.1,
             1000
         );
-        camera.position.z = 4.2;
+        camera.position.z = 5.2;
 
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(globeContainer.clientWidth, globeContainer.clientHeight);
@@ -610,3 +828,34 @@ document.addEventListener('DOMContentLoaded', () => {
     loadConversationHistory();
     initThreeGlobe();
 });
+
+
+
+// ==========================================
+// 5. CONSOLE DEBUG HELPER FOR SCREEN READER ANNOUNCEMENTS
+// ==========================================
+window.jasonDebug = {
+    testProcessingAnnouncement: function(text = 'Processing') {
+        const statusEl = document.getElementById('processingStatus');
+        if (!statusEl) {
+            console.warn('[JasonDebug] #processingStatus element not found in DOM.');
+            return false;
+        }
+        statusEl.textContent = '';
+        setTimeout(() => {
+            statusEl.textContent = text;
+            console.log('[JasonDebug] #processingStatus updated to:', JSON.stringify(text));
+            console.log('[JasonDebug] Current element DOM state:', statusEl);
+        }, 30);
+        return true;
+    },
+    inspectStatusElement: function() {
+        const statusEl = document.getElementById('processingStatus');
+        console.log('[JasonDebug] Status Element:', statusEl);
+        console.log('[JasonDebug] textContent:', statusEl ? statusEl.textContent : 'N/A');
+        console.log('[JasonDebug] aria-live:', statusEl ? statusEl.getAttribute('aria-live') : 'N/A');
+        return statusEl;
+    }
+};
+
+console.log('%c[Jason Debugger] Console helper loaded. Run window.jasonDebug.testProcessingAnnouncement() to test screen-reader status live.', 'color: #00f0ff; background: #0b0f19; padding: 4px 8px; border-radius: 4px;');

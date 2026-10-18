@@ -93,8 +93,8 @@ export function updateShortTermMemory(role, content, metadata={}) {
         timestamp: new Date().toISOString()
     };
 
-    if (metadata.image) {
-        message.image = metadata.image;
+    if (metadata.images && metadata.images.length > 0) {
+        message.images = metadata.images    ;
     }
 
     shortTermMemory.messages.push(message);
@@ -134,9 +134,13 @@ export function buildChatPrompt(latestUserMessage, longTermMemories = []) {
     const longTermSection = longTermMemories.length
         ? longTermMemories
             .map(memory =>
-                `- ${memory.category}: ${memory.content}`
+                [
+                    `- Category: ${memory.category}`,
+                    `  Fact: ${memory.content}`,
+                    `  Given on: ${memory.created_at}`,
+                    `  Last updated: ${memory.updated_at}`
+                ].join("\n")
             )
-            .join("\n")
         : "No long-term memories available.";
 
     return [

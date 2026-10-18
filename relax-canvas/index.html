@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Soothing Orb Garden</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="ambient-glow ambient-top"></div>
+    <div class="ambient-glow ambient-right"></div>
+    <div class="ambient-glow ambient-bottom"></div>
+
+    <div id="welcomeOverlay" class="overlay">
+        <div class="overlay-card">
+            <div class="orb-preview"></div>
+            <h1>Orb Garden</h1>
+            <p>A tranquil interactive space. Tap or click orbs to collect energy and watch them bloom.</p>
+            <button id="startButton" class="btn-start">Enter Garden</button>
+        </div>
+    </div>
+
+    <div id="gameContainer">
+        <canvas id="gameCanvas"></canvas>
+        <div id="hud" class="hidden">
+            <div class="hud-item">Energy: <span id="scoreVal">0</span></div>
+            <div class="hud-item">Orbs: <span id="orbCountVal">0</span></div>
+            <button id="pauseButton" class="btn-icon" title="Pause">⏸</button>
+        </div>
+        <div id="pauseOverlay" class="overlay hidden">
+            <div class="overlay-card">
+                <h2>Garden Paused</h2>
+                <p>Take a breath. Continue whenever you are ready.</p>
+                <div class="button-row">
+                    <button id="resumeButton" class="btn-start">Resume</button>
+                    <button id="restartButton" class="btn-secondary">Reset Garden</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>

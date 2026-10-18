@@ -3,7 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>J.A.R.V.I.S. / Jason — Cinematic AI Assistant</title>
+    <title>Jason AI Assistant</title>
+    <link rel="icon" href="images/icons8-processor-96.png" type="image/x-icon">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -13,8 +14,13 @@
 </head>
 <body>
     <div class="app-container">
-        <!-- Sidebar / Conversation Area (Left Side) -->
-        <aside class="sidebar">
+        <!-- Sidebar / Conversation Area (Left Side / Mobile Bottom Panel) -->
+        <aside class="sidebar chat-panel" id="chatPanel">
+            <div class="chat-header" id="dragHeader">
+                <div id="dragHandle" class="drag-handle" role="button" aria-label="Drag to expand or collapse"></div>
+                <div class="chat-title">Chat</div>
+            </div>
+
             <div class="sidebar-header">
                 <div class="brand">
                     <div class="brand-avatar">J</div>
@@ -27,8 +33,19 @@
 
             <!-- Messages Stream in Sidebar -->
             <div class="chat-messages" id="chatMessages">
-                
+                <div
+                    id="typingIndicator"
+                    class="typing-indicator"
+                    hidden
+                    aria-label="Jason is typing"
+                >
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
             </div>
+
+            <div id="processingStatus" aria-live="polite" class="visually-hidden"></div>
 
             <!-- Input Bar inside Sidebar -->
             <div class="chat-input-area">
@@ -128,5 +145,129 @@
     </div>
 
     <script src="script.js"></script>
+
+    <!-- Mobile Draggable Swipe Script with Smooth Physics -->
+    <script>
+    (function() {
+      const panel = document.getElementById('chatPanel');
+      const header = document.getElementById('dragHeader');
+      const handle = document.getElementById('dragHandle');
+      
+      if (!panel || !header || !handle) return;
+
+      const COLLAPSED_VISIBLE_PX = 50; // visible height when collapsed
+      const SNAP_THRESHOLD = 0.35;  
+      const TOP_GAP_PX = 48; // when fully expanded leave this many px visible at top so handle stays reachable
+
+      let panelHeight = 0;
+      let collapsedTranslate = 0;
+      let expandedTranslate = 0;
+      let startY = 0;
+      let startTranslate = 0;
+      let currentTranslate = 0;
+      let dragging = false;
+      let rafId = null;
+
+      function recalc() {
+        // If on desktop, clear any mobile transform and bail out.
+        if (window.innerWidth >= 1080) {
+          panel.style.transition = 'none';
+          panel.style.transform = 'none';
+          return;
+        }
+
+        panel.style.transition = 'none';
+        panelHeight = Math.round(panel.getBoundingClientRect().height);
+        const vh = window.innerHeight;
+        // For a fixed bottom panel, translateY values are positive downward.
+        collapsedTranslate = Math.max(0, panelHeight - COLLAPSED_VISIBLE_PX);
+        expandedTranslate = Math.max(0, TOP_GAP_PX + panelHeight - vh);
+
+        // Clamp currentTranslate to new bounds
+        currentTranslate = Math.max(expandedTranslate, Math.min(collapsedTranslate, currentTranslate));
+        panel.style.transform = `translateY(${currentTranslate}px)`;
+      }
+
+      function setInitialPosition() {
+        panelHeight = Math.round(panel.getBoundingClientRect().height);
+
+        // If desktop, ensure the sidebar is in its normal (desktop) position.
+        if (window.innerWidth >= 1080) {
+          currentTranslate = 0;
+          panel.style.transform = 'none';
+          return;
+        }
+
+        collapsedTranslate = Math.max(0, panelHeight - COLLAPSED_VISIBLE_PX);
+        expandedTranslate = Math.max(0, TOP_GAP_PX + panelHeight - window.innerHeight);
+        currentTranslate = collapsedTranslate;
+        panel.style.transform = `translateY(${currentTranslate}px)`;
+      }
+
+      // Defer initial placement until first frame (fonts/layout settled)
+      window.requestAnimationFrame(() => setInitialPosition());
+      window.addEventListener('resize', () => setTimeout(recalc, 80));
+
+      function onPointerDown(e) {
+        if (window.innerWidth >= 1080) return;
+        dragging = true;
+        startY = e.touches ? e.touches[0].clientY : e.clientY;
+        startTranslate = currentTranslate;
+        panel.style.transition = 'none'; 
+        e.preventDefault();
+      }
+
+      function onPointerMove(e) {
+        if (!dragging || window.innerWidth >= 1080) return;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const delta = clientY - startY;
+        let next = startTranslate + delta;
+
+        next = Math.max(expandedTranslate, Math.min(collapsedTranslate, next));
+        currentTranslate = next;
+
+        if (!rafId) {
+          rafId = requestAnimationFrame(() => {
+            panel.style.transform = `translateY(${currentTranslate}px)`;
+            rafId = null;
+          });
+        }
+      }
+
+      function onPointerUp() {
+        if (!dragging || window.innerWidth >= 1080) return;
+        dragging = false;
+        panel.style.transition = 'transform 320ms cubic-bezier(0.22, 0.9, 0.35, 1)'; 
+
+        const range = collapsedTranslate - expandedTranslate;
+        const progress = range > 1 ? (collapsedTranslate - currentTranslate) / range : 0;
+
+        if (progress >= SNAP_THRESHOLD) {
+          currentTranslate = expandedTranslate;
+        } else {
+          currentTranslate = collapsedTranslate;
+        }
+
+        panel.style.transform = `translateY(${currentTranslate}px)`;
+      }
+
+      header.addEventListener('touchstart', onPointerDown, { passive: false });
+      window.addEventListener('touchmove', onPointerMove, { passive: false });
+      window.addEventListener('touchend', onPointerUp);
+
+      header.addEventListener('mousedown', onPointerDown);
+      window.addEventListener('mousemove', onPointerMove);
+      window.addEventListener('mouseup', onPointerUp);
+
+      handle.addEventListener('touchstart', (e) => { header.dispatchEvent(new TouchEvent('touchstart', {changedTouches: e.changedTouches})); }, {passive:false});
+      handle.addEventListener('mousedown', (e) => { header.dispatchEvent(new MouseEvent('mousedown', e)); });
+
+      // Watch for content/size changes so the panel stays correctly positioned
+      const observer = new MutationObserver(() => {
+        setTimeout(recalc, 40);
+      });
+      observer.observe(panel, { childList: true, subtree: true });
+    })();
+    </script>
 </body>
 </html>

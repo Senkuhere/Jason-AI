@@ -275,6 +275,18 @@ A failed capability should:
 4. Never claim success.
 5. Allow Jason to explain the failure.
 
+## get_wifi_network
+
+Gets the current wifi network information the pc/laptop is connected to
+
+### openOrRunFile 
+
+Opens a file or run a program on a specified file path
+
+### read_document 
+
+Read document files such as .pdf, .docx, .xlx, .pptx, and etc.
+
 ## Testing
 
 Run all tests with:

@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Neon Leap</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="ui">
+    <div id="menu" class="panel visible">
+      <h1 class="title">NEON LEAP</h1>
+      <p class="subtitle">A short, dreamy platformer</p>
+      <div class="menu-buttons">
+        <button id="playBtn" class="glow">Play</button>
+        <button id="controlsBtn">Controls</button>
+      </div>
+      <div class="credits">Created with Canvas — No assets</div>
+    </div>
+
+    <div id="controlsPanel" class="panel">
+      <h2>Controls</h2>
+      <ul>
+        <li>A / D or ← / → : Move</li>
+        <li>W, ↑ or Space : Jump</li>
+        <li>Esc : Pause / Resume</li>
+        <li>R : Restart Level</li>
+      </ul>
+      <button id="backFromControls">Back</button>
+    </div>
+
+    <div id="hud" class="panel hidden">
+      <div id="leftHud">
+        <div id="crystals">Crystals: <span id="crystalCount">0</span></div>
+        <div id="checkpoint">Checkpoint: <span id="checkpointIdx">1</span></div>
+      </div>
+      <div id="rightHud">
+        <button id="pauseBtn">Pause</button>
+      </div>
+    </div>
+
+    <div id="pauseScreen" class="overlay hidden">
+      <div class="menuBox">
+        <h2>Paused</h2>
+        <button id="resumeBtn">Resume</button>
+        <button id="restartBtn">Restart Level</button>
+        <button id="menuBtn">Main Menu</button>
+      </div>
+    </div>
+
+    <div id="victoryScreen" class="overlay hidden">
+      <div class="menuBox">
+        <h2>Victory!</h2>
+        <p>Crystals collected: <span id="finalCrystals">0</span></p>
+        <p>Time: <span id="finalTime">0.0</span>s</p>
+        <button id="playAgainBtn">Play Again</button>
+        <button id="menuBtn2">Main Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <script src="game.js"></script>
+</body>
+</html>

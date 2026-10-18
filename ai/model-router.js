@@ -63,7 +63,7 @@ ${userMessage}
 `;
 
     const response = await routerClient.models.generateContent({
-        model: "gemini-3.5-flash-lite",
+        model: "gemini-3.1-flash-lite",
         contents: routingPrompt,
         config: {
             responseMimeType: "application/json"

@@ -55,7 +55,7 @@ async function readRequestBody(request) {
     for await (const chunk of request) {
         body += chunk;
 
-        if (body.length > 8_000_000) {
+        if (body.length > 60_000_000) {
             throw new Error("Request body is too large.");
         }
     }
@@ -143,6 +143,61 @@ function validateImage(image) {
         data: image.data
     };
 }
+const UPLOADS_DIRECTORY = path.join(__dirname, "jason_uploads");
+const MAX_FILE_BYTES = 15 * 1024 * 1024;
+const MAX_ATTACHMENTS = 5;
+
+const ALLOWED_FILE_EXTENSIONS = new Set([
+    ".pdf", ".docx", ".pptx", ".xlsx", ".xls", ".csv", ".txt", ".md",
+    ".json", ".html", ".css", ".js", ".py", ".xml", ".yml", ".yaml", ".log"
+]);
+
+function validateFile(file) {
+    if (file === null || file === undefined) {
+        return null;
+    }
+
+    if (typeof file !== "object") {
+        throw new Error("Invalid file attachment.");
+    }
+
+    const name = path
+        .basename(String(file.name || "file"))
+        .replace(/[^\w.\- ()]/g, "_");
+
+    const extension = path.extname(name).toLowerCase();
+
+    if (!ALLOWED_FILE_EXTENSIONS.has(extension)) {
+        throw new Error(
+            `Files of type ${extension || "unknown"} are not supported.`
+        );
+    }
+
+    if (typeof file.data !== "string" || file.data.length === 0) {
+        throw new Error("The file data is missing.");
+    }
+
+    const buffer = Buffer.from(file.data, "base64");
+
+    if (buffer.length > MAX_FILE_BYTES) {
+        throw new Error("The file is too large (15 MB max).");
+    }
+
+    return { name, buffer };
+}
+
+async function storeUploadedFile({ name, buffer }, index = 0) {
+    await fs.mkdir(UPLOADS_DIRECTORY, { recursive: true });
+
+    const savedPath = path.join(
+        UPLOADS_DIRECTORY,
+        `${Date.now()}-${index}-${name}`
+    );
+    await fs.writeFile(savedPath, buffer);
+
+    return savedPath;
+}
+
 const server = http.createServer(async (request, response) => {
     try {
         if (
@@ -152,29 +207,87 @@ const server = http.createServer(async (request, response) => {
             const rawBody = await readRequestBody(request);
             const body = JSON.parse(rawBody);
 
+            const rawImages = Array.isArray(body.images)
+                ? body.images
+                : body.image
+                    ? [body.image]
+                    : [];
+
+            const rawFiles = Array.isArray(body.files)
+                ? body.files
+                : body.file
+                    ? [body.file]
+                    : [];
+
             if (
-                (
-                    typeof body.message !== "string" ||
-                    body.message.trim() === ""
-                ) &&!body.image
+                rawImages.length > MAX_ATTACHMENTS ||
+                rawFiles.length > MAX_ATTACHMENTS
             ) {
                 sendJson(response, 400, {
-                    error: "A message or image is required."
+                    error: `You can attach up to ${MAX_ATTACHMENTS} images and ${MAX_ATTACHMENTS} files per message.`
                 });
                 return;
             }
-            const image = validateImage(body.image);
 
-            const storedReference = image
-                ? await storeImage(image)
-                : null;
+            const hasText =
+                typeof body.message === "string" &&
+                body.message.trim() !== "";
 
-            const imageForJason = image
-                ? {
-                    ...image,
-                    ...storedReference
+            if (!hasText && rawImages.length === 0 && rawFiles.length === 0) {
+                sendJson(response, 400, {
+                    error: "A message, image, or file is required."
+                });
+                return;
+            }
+
+            const images = rawImages
+                .map(item => validateImage(item))
+                .filter(Boolean);
+
+            const files = rawFiles
+                .map(item => validateFile(item))
+                .filter(Boolean);
+
+            let messageForJason = hasText ? body.message.trim() : "";
+
+            if (files.length > 0) {
+                const savedFiles = [];
+
+                for (const [index, file] of files.entries()) {
+                    savedFiles.push({
+                        name: file.name,
+                        path: await storeUploadedFile(file, index)
+                    });
                 }
-                : null;
+
+                if (!messageForJason) {
+                    messageForJason =
+                        files.length === 1
+                            ? "Please read the attached file and give me a short summary."
+                            : "Please read the attached files and give me a short summary of each.";
+                }
+
+                messageForJason +=
+                    "\n\n" +
+                    savedFiles
+                        .map(
+                            saved =>
+                                `[Attached file: "${saved.name}" saved at ${saved.path}. ` +
+                                "Use the read_document tool to read it.]"
+                        )
+                        .join("\n");
+            }
+
+            const storedReferences = [];
+
+            for (const image of images) {
+                storedReferences.push(await storeImage(image));
+            }
+
+            const imagesForJason = images.map((image, index) => ({
+                ...image,
+                ...storedReferences[index]
+            }));
 
             const events = [];
 
@@ -182,24 +295,43 @@ const server = http.createServer(async (request, response) => {
 
             try {
                 result = await sendMessage(
-                    body.message || "",
+                    messageForJason,
                     {
-                        image: imageForJason,
+                        images: imagesForJason,
                         onEvent(event) {
                             events.push(event);
+
+                            if (event.type === "tool_started") {
+                                console.log(
+                                    `Jason requested tool: ${event.name}`,
+                                    JSON.stringify(event.args)
+                                );
+                            }
+
+                            if (event.type === "tool_finished") {
+                                console.log(
+                                    `Tool finished: ${event.name}`,
+                                    JSON.stringify(event.result)?.slice(0, 300)
+                                );
+                            }
+
+                            if (event.type?.endsWith("_failed")) {
+                                console.error(
+                                    `[Jason] ${event.type} ${event.name ?? ""}:`,
+                                    event.error
+                                );
+                            }
                         }
                     }
                 );
             } catch (error) {
-                if (storedReference) {
-                    await deleteStoredImage(
-                        storedReference.id
-                    );
+                for (const reference of storedReferences) {
+                    await deleteStoredImage(reference.id);
                 }
 
                 throw error;
             }
-            
+
             sendJson(response, 200, {
                 reply: result.reply,
                 provider: result.provider,
@@ -208,6 +340,7 @@ const server = http.createServer(async (request, response) => {
 
             return;
         }
+
         if (
             request.method === "GET" &&
             request.url === "/api/history"
@@ -271,7 +404,7 @@ async function start() {
             );
         }
 
-        server.listen(PORT, () => {
+        server.listen(PORT, "127.0.0.1", () => {
             console.log(
                 `Jason web interface: http://localhost:${PORT}`
             );

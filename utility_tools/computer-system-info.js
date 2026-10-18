@@ -3,6 +3,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { checkDatabaseConnection } from "../long-term-memory.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 export function getComputerHardwareInfo() {
     const processors = os.cpus();

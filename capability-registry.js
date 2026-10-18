@@ -22,6 +22,32 @@ import {
     getJasonHealth
 } from "./utility_tools/computer-system-info.js";
 
+import {
+    getNetworkDetails,
+    checkInternetConnection,
+    checkDnsResolution,
+    getTailscaleStatus,
+    getTailscaleIps,
+    getDiskSpace,
+    getRunningProcesses,
+    getBatteryStatus,
+    getWindowsUpdatesStatus,
+    getFirewallStatus,
+    getWindowsDefenderStatus,
+    getInstalledPrograms,
+    getEventLogs,
+    getServicesStatus,
+    getNearbyWifiNetworks,
+    getCurrentWifiPassword
+} from "./utility_tools/execute-commands.js";
+
+import {
+    prepareOpenOrRunFile,
+    openOrRunFile
+} from "./utility_tools/computer-control.js";
+
+import { readDocument } from "./file_tools/document-reader.js";
+
 function capability({
     name,
     description,
@@ -382,7 +408,346 @@ const capabilities = new Map([
             getCapabilitySummary(),
         cacheable: true
     })
-    ]
+    ],
+    [
+    "get_network_details",
+    capability({
+        name: "get_network_details",
+        description:
+            "Execute fixed, read-only Windows network commands and report the Wi-Fi connection, IP configuration, DNS, gateway, and adapter status.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getNetworkDetails(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "check_internet_connection",
+    capability({
+        name: "check_internet_connection",
+        description:
+            "Execute a read-only Windows ping command to check basic internet connectivity.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            checkInternetConnection(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "check_dns_resolution",
+    capability({
+        name: "check_dns_resolution",
+        description:
+            "Execute a read-only Windows DNS lookup to verify that domain names resolve correctly.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            checkDnsResolution(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_tailscale_status",
+    capability({
+        name: "get_tailscale_status",
+        description:
+            "Execute the read-only Tailscale status command and report the private VPN connection state and connected devices.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getTailscaleStatus(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_tailscale_ips",
+    capability({
+        name: "get_tailscale_ips",
+        description:
+            "Execute the read-only Tailscale IP command and report this computer's private Tailscale addresses.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getTailscaleIps(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_disk_space",
+    capability({
+        name: "get_disk_space",
+        description:
+            "Execute a read-only Windows command to report available and used disk space.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getDiskSpace(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_running_processes",
+    capability({
+        name: "get_running_processes",
+        description:
+            "Execute a read-only Windows command to list currently running processes.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getRunningProcesses(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_battery_status",
+    capability({
+        name: "get_battery_status",
+        description:
+            "Execute a read-only Windows command to report the computer's battery status and charge level.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getBatteryStatus(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_windows_updates_status",
+    capability({
+        name: "get_windows_updates_status",
+        description:
+            "Execute a read-only Windows command to list installed Windows updates and update dates.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getWindowsUpdatesStatus(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_firewall_status",
+    capability({
+        name: "get_firewall_status",
+        description:
+            "Execute a read-only Windows command to report the firewall status profile and default action.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getFirewallStatus(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_windows_defender_status",
+    capability({
+        name: "get_windows_defender_status",
+        description:
+            "Execute a read-only Windows command to report the Windows Defender protection status and health.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getWindowsDefenderStatus(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_installed_programs",
+    capability({
+        name: "get_installed_programs",
+        description:
+            "Execute a read-only Windows registry query to list installed programs on the machine.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getInstalledPrograms(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_event_logs",
+    capability({
+        name: "get_event_logs",
+        description:
+            "Execute a read-only Windows event log query and report recent error or warning entries from a chosen log.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                logName: {
+                    type: "STRING",
+                    description: "Windows log name such as System, Application, Security"
+                },
+                maxEvents: {
+                    type: "NUMBER",
+                    description: "Maximum event entries to return, typically 10 to 100"
+                }
+            }
+        },
+        execute: ({ logName = "System", maxEvents = 25 }) =>
+            getEventLogs({ logName, maxEvents }),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_services_status",
+    capability({
+        name: "get_services_status",
+        description:
+            "Execute a read-only Windows service query to report running, stopped, or disabled services.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getServicesStatus(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+    [
+    "get_nearby_wifi_networks",
+    capability({
+        name: "get_nearby_wifi_networks",
+        description:
+            "Execute a read-only Windows command to list nearby Wi‑Fi networks visible to this computer.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getNearbyWifiNetworks(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+        [
+        "open_or_run_file",
+        capability({
+            name: "open_or_run_file",
+            description:
+                "Open a file with its default application (pdf, docx, xlsx, pptx, html, images, " +
+                "text, etc.) or run a script (.py, .js) and return its output. " +
+                "Accepts a full path such as C:\\Users\\me\\Documents\\report.pdf, " +
+                "or a path relative to the project folder. " +
+                "Use this whenever the user asks to open or run a file.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    filePath: {
+                        type: "STRING",
+                        description: "Full path, or path relative to the project folder"
+                    },
+                    action: {
+                        type: "STRING",
+                        enum: ["open", "run"],
+                        description:
+                            "Optional. 'run' executes .py/.js and returns the output; " +
+                            "'open' uses the default app. If omitted, scripts run and " +
+                            "everything else opens."
+                    }
+                },
+                required: ["filePath"]
+            },
+            prepare: prepareOpenOrRunFile,
+            execute: ({ filePath, action }) =>
+                openOrRunFile({ filePath, action }),
+            cacheable: false,
+            mutating: true,
+            requiresApproval: true
+        })
+    ],
+        [
+    "get_current_wifi_password",
+    capability({
+        name: "get_current_wifi_password",
+        description:
+            "Read the saved password of the Wi-Fi network this computer is currently connected to. " +
+            "Only use this when the user explicitly asks for their current Wi-Fi password.",
+        parameters: {
+            type: "OBJECT",
+            properties: {}
+        },
+        execute: () =>
+            getCurrentWifiPassword(),
+        cacheable: false,
+        mutating: false
+    })
+    ],
+        [
+        "read_document",
+        capability({
+            name: "read_document",
+            description:
+                "Read the text of a document: PDF, Word (.docx), PowerPoint (.pptx), " +
+                "Excel (.xlsx, .xls), or a text/code file (txt, md, csv, json, py, js, html). " +
+                "Use this when the user asks to read, summarize, or answer questions about a file, " +
+                "or when a message says a file was attached (it gives the saved path). " +
+                "Accepts a full path. Long documents come back in parts: if truncated is true, " +
+                "call again with startChar set to nextStartChar. " +
+                "Old .doc and .ppt files are not supported.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    filePath: {
+                        type: "STRING",
+                        description: "Full path to the file"
+                    },
+                    startChar: {
+                        type: "NUMBER",
+                        description: "Optional. Where to start reading, for continuing a long document. Default 0."
+                    },
+                    maxChars: {
+                        type: "NUMBER",
+                        description: "Optional. How many characters to return. Default 20000, max 40000."
+                    }
+                },
+                required: ["filePath"]
+            },
+            execute: ({ filePath, startChar, maxChars }) =>
+                readDocument({ filePath, startChar, maxChars }),
+            cacheable: false,
+            mutating: false
+        })
+    ],
+    
 ]);
 
 export function getToolDefinitions() {
@@ -424,3 +789,4 @@ export async function executeCapability(name, args = {}) {
 
     return item.execute(args);
 }
+

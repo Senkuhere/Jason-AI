@@ -2,7 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 
 
-const PROJECT_ROOT = path.resolve(
+export const PROJECT_ROOT = path.resolve(
     process.env.JASON_WORKSPACE_ROOT || process.cwd()
 );
 
