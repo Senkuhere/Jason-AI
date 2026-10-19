@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>STT+TTS Demo</title>
+  <style>
+    body{font-family:system-ui,Arial;background:#071126;color:#dfefff;padding:20px}
+    .box{max-width:720px;margin:auto;padding:18px;border-radius:12px;background:rgba(255,255,255,0.03)}
+    #chatInput{width:100%;padding:10px;margin-top:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:transparent;color:inherit}
+    #micBtn{margin-top:10px;padding:8px 12px;border-radius:8px;background:#002b36;color:#00f0ff;border:none}
+    #log{white-space:pre-wrap;margin-top:10px}
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h2>STT+TTS Demo</h2>
+    <p>Open console for logs. Click the mic button to start/stop recognition (uses browser Web Speech APIs).</p>
+    <input id="chatInput" placeholder="Speak to populate this input"/>
+    <div>
+      <button id="micBtn">🎤 Toggle Mic</button>
+      <button id="speakBtn">🔊 Speak sample response</button>
+    </div>
+    <div id="log"></div>
+  </div>
+
+  <script src="stt_tts_bridge.js"></script>
+  <script>
+    const api = JasonSTTTS.init({ chatInputSelector:'#chatInput', chatMessagesSelector:'#log', language:'en-US', continuous:true, autoPlayTTS:true, preferMale:true, attachMicButton:false });
+    const mic = document.getElementById('micBtn');
+    const speak = document.getElementById('speakBtn');
+    mic.addEventListener('click',()=>{ api.toggleListening(); });
+    speak.addEventListener('click',()=>{ api.speak('Hello Sir. This is Jason speaking. Testing a natural male voice.'); });
+    window.addEventListener('jason_stt_final', (e)=>{ document.getElementById('log').textContent += '\nFinal: '+e.detail.text; });
+  </script>
+</body>
+</html>

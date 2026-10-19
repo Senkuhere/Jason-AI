@@ -1,4 +1,17 @@
 document.addEventListener('DOMContentLoaded', () => {
+    if (window.JasonSTTTS) {
+    // keep the instance so we can call speak(...) later
+    window.jasonSttTts = window.JasonSTTTS.init({
+        chatInputSelector: '#chatInput',
+        chatMessagesSelector: '#chatMessages',
+        language: 'en-US',
+        continuous: true,
+        autoSendOnStop: false,
+        autoPlayTTS: true,
+        preferMale: true,
+        attachMicButton: true
+    });
+    }
     const htmlElement = document.documentElement;
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const chatInput = document.getElementById('chatInput');
@@ -26,6 +39,8 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('jason_ui_theme', newTheme);
         updateGlobeTheme(newTheme);
     });
+
+    
 
     // 2. Auto-resize textarea
     chatInput.addEventListener('input', function () {
@@ -364,6 +379,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             appendMessage("assistant", data.reply);
+            
+            // Auto-play assistant voice if STT+TTS was initialized
+            // --------------TRIAL STT+TTS----------------------
+
+            if (window.jasonSttTts && typeof window.jasonSttTts.speak === 'function') {
+            try { window.jasonSttTts.speak(String(data.reply || '')); } catch (e) { console.warn('TTS speak failed', e); }
+            }
+
+            // --------------TRIAL STT+TTS----------------------
+
+
             displayFailureEvents(data.events);
 
             setGlobeState('idle', 0.5);

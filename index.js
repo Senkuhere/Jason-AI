@@ -6,6 +6,8 @@ import {
     sendMessage
 } from "./jason-core.js";
 
+import { startScreenAwareness } from "./utility_tools/computer-control.js";
+
 const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -29,25 +31,12 @@ function chat() {
             console.log("Jason is offline.");
             process.exit(0);
         }
+        const startedAt = Date.now();
+        const elapsed = () => `${((Date.now() - startedAt) / 1000).toFixed(1)}s`;
         try {
             const result = await sendMessage(trimmedMessage, {
-                onApproval({ name, preview }) {
-                    console.log(`\nJason wants to ${preview?.description ?? name}`);
-
-                    if (preview?.code) {
-                        console.log("--- script ---");
-                        console.log(preview.code);
-                        console.log("--- end ---");
-                    }
-
-                    return new Promise(resolve => {
-                        rl.question("Allow? (y/N) ", answer =>
-                            resolve(answer.trim().toLowerCase() === "y")
-                        );
-                    });
-                },
                 onEvent(event) {
-                    
+                    console.log(`[${elapsed()}] ${event.type} ${event.name ?? ""}`);
                     if (event.type === "provider_selected") {
                         console.log(
                             `Selected provider: ${event.name}`
@@ -87,7 +76,9 @@ function chat() {
 }
 
 async function start() {
+    startScreenAwareness();   // starts the window helper and keeps the screen summary fresh
     try {
+        
         const status = await initializeJason();
 
         if (status.longTermMemoryAvailable) {

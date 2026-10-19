@@ -1,0 +1,4 @@
+/* Minimal styles for mic button if you want a separate stylesheet. */
+#jason-mic-button { transition: box-shadow 160ms ease, transform 120ms ease; }
+#jason-mic-button[aria-pressed="true"] { box-shadow: 0 6px 24px rgba(0,240,255,0.22); transform: translateY(-1px); }
+#jason-mic-button:active { transform: translateY(0); }

@@ -1,5 +1,10 @@
 import pg from "pg";
 
+
+let memoryCache = null;
+let memoryCacheAt = 0;
+const MEMORY_CACHE_MS = 5 * 60 * 1000;
+
 const { Pool } = pg;
 
 const pool = new Pool({
@@ -61,19 +66,8 @@ function countMatches(memory, queryTokens) {
 }
 
 export async function getLongTermMemories(query = "", limit = 12) {
-    const result = await pool.query(
-        `
-        SELECT
-            id, memory_key, category, content, importance,
-            confidence, created_at, updated_at
-        FROM long_term_memories
-        WHERE deleted_at IS NULL
-        ORDER BY importance DESC, updated_at DESC
-        LIMIT 300
-        `
-    );
 
-    const memories = result.rows;
+    const memories = await loadAllMemories();
 
     // A personal assistant's memories are small, so just give him all of them
     if (memories.length <= SMALL_STORE_LIMIT) {
@@ -141,7 +135,7 @@ export async function saveLongTermMemory({
             confidence
         ]
     );
-
+    memoryCache = null; // Invalidate cache
     return result.rows[0];
 }
 
@@ -158,6 +152,23 @@ export async function deleteLongTermMemory(key) {
         `,
         [key]
     );
-
+    memoryCache = null; // Invalidate cache
     return result.rows[0] || null;
+}
+
+async function loadAllMemories() {
+    if (memoryCache && Date.now() - memoryCacheAt < MEMORY_CACHE_MS) return memoryCache;
+
+    const result = await pool.query(`
+        SELECT id, memory_key, category, content, importance,
+               confidence, created_at, updated_at
+        FROM long_term_memories
+        WHERE deleted_at IS NULL
+        ORDER BY importance DESC, updated_at DESC
+        LIMIT 300
+    `);
+
+    memoryCache = result.rows;
+    memoryCacheAt = Date.now();
+    return memoryCache;
 }

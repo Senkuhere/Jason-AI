@@ -12,7 +12,8 @@ import {
     getCurrentDate,
     getWeather,
     searchWeb,
-    openWebPage
+    openWebPage,
+    searchAndOpen
 } from "./utility_tools/utility.js";
 
 import {
@@ -43,7 +44,13 @@ import {
 
 import {
     prepareOpenOrRunFile,
-    openOrRunFile
+    openOrRunFile,
+    launchApp,
+    listWindows,
+    getScreenInfo,
+    windowAction,
+    mediaControl,
+    systemControl
 } from "./utility_tools/computer-control.js";
 
 import { readDocument } from "./file_tools/document-reader.js";
@@ -54,7 +61,8 @@ function capability({
     parameters,
     execute,
     cacheable = false,
-    mutating = false
+    mutating = false,
+    instantReply = null
 }) {
     return {
         name,
@@ -65,7 +73,8 @@ function capability({
         },
         execute,
         cacheable,
-        mutating
+        mutating,
+        instantReply
     };
 }
 
@@ -312,7 +321,7 @@ const capabilities = new Map([
             cacheable: true
         })
     ],
-    [
+        [
         "open_web_page",
         capability({
             name: "open_web_page",
@@ -325,14 +334,56 @@ const capabilities = new Map([
                         type: "STRING",
                         description:
                             "A complete http or https URL"
+                    },
+                    say: {
+                        type: "STRING",
+                        description:
+                            "One short, natural sentence telling the user what you are opening, " +
+                            "in your own words and voice. For example: \"Playing Panaginip by Nicole, Sir.\""
                     }
                 },
-                required: ["url"]
+                required: ["url", "say"]
             },
             execute: ({ url }) =>
                 openWebPage(url),
-            mutating: true
+            mutating: true,
+            instantReply: (args, result) => {
+                if (typeof args.say === "string" && args.say.trim()) {
+                    return args.say.trim();
+                }
+
+                try {
+                    const host = new URL(result?.url || args.url)
+                        .hostname.replace(/^www\./, "");
+                    return `Opening ${host}, Sir.`;
+                } catch {
+                    return "Opening it, Sir.";
+                }
+            }
         })
+    ],
+    [
+    "search_and_open",
+    capability({
+        name: "search_and_open",
+        description:
+            "Search the web and immediately open the top result in the browser, in one step. " +
+            "Use this when the user wants to play, watch, or open something and you do not know the exact URL " +
+            "(a song, a video, a page). Optionally pass a site domain such as youtube.com to restrict the search. " +
+            "For questions that need information, use search_web instead.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                query: { type: "STRING", description: "What to search for" },
+                site: { type: "STRING", description: "Optional domain to restrict to, e.g. youtube.com" },
+                say: { type: "STRING", description: "One short, natural sentence about what you are opening, in your own voice." }
+            },
+            required: ["query", "say"]
+        },
+        execute: ({ query, site }) => searchAndOpen(query, site),
+        mutating: true,
+        instantReply: (args) => args.say?.trim() || "Opening it, Sir."
+    })
     ],
     [
         "get_computer_hardware_info",
@@ -681,17 +732,39 @@ const capabilities = new Map([
                         description:
                             "Optional. 'run' executes .py/.js and returns the output; " +
                             "'open' uses the default app. If omitted, scripts run and " +
-                            "everything else opens."
+                            "everything else opens." 
+                            
+                    },
+                    say: {
+                        type: "STRING",
+                        description: 
+                            "One or two short, natural sentences telling the user what you opened or started, " +
+                            "in your own words and voice. If you chose it yourself, name your pick and give a short reason " +
+                            "(for example: \"I picked Snake, Sir. It is quick to start and good for a short break.\")."
                     }
                 },
-                required: ["filePath"]
+                required: ["filePath", "say"]
             },
             prepare: prepareOpenOrRunFile,
             execute: ({ filePath, action }) =>
                 openOrRunFile({ filePath, action }),
             cacheable: false,
             mutating: true,
-            requiresApproval: true
+            requiresApproval: true,
+            instantReply: (args, result) => {
+                const say = typeof args.say === "string" ? args.say.trim() : "";
+                const name = String(args.filePath || "").split(/[\\/]/).filter(Boolean).slice(-2).join("/");
+
+                if (result?.execution?.action === "open" || result?.execution?.action === "run") {
+                    return say || `Opened ${name}, Sir.`;
+                }
+
+                if (result?.running === true) {
+                    return say || `${name} is running, Sir.`;
+                }
+
+                return null; // a finished script: Jason reads the output to you
+            }
         })
     ],
         [
@@ -747,6 +820,212 @@ const capabilities = new Map([
             mutating: false
         })
     ],
+        [
+        "launch_app",
+        capability({
+            name: "launch_app",
+            // Telling the model to use full names means common apps launch on the first try
+            description:
+                "Start an installed application by name. Use the app's full official name when you " +
+                "know it (for example Google Chrome, Visual Studio Code, Microsoft Word, Spotify). " +
+                "If the result lists candidates, pick the right one and call again, or ask the user.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    // The app to start
+                    name: {
+                        type: "STRING",
+                        description: "The application's name"
+                    },
+                    // The confirmation Jason speaks, written by the model so it is never canned
+                    say: {
+                        type: "STRING",
+                        description:
+                            "One or two short, natural sentences telling the user what you are starting, " +
+                            "in your own words and voice."
+                    }
+                },
+                required: ["name", "say"]
+            },
+            execute: ({ name }) =>
+                launchApp(name),
+            mutating: true,
+            // Only used when the app really started; failures go back to the model
+            instantReply: (args, result) => {
+                const say = typeof args.say === "string" ? args.say.trim() : "";
+                return say || `Opening ${result?.execution?.app || args.name}, Sir.`;
+            }
+        })
+    ],
+        [
+        "list_windows",
+        capability({
+            name: "list_windows",
+            description:
+                "List the windows that are open right now: the program name, window title, " +
+                "state (normal, minimized, maximized), position, size, and which one is active. " +
+                "Use this to see what the user has open or to find a window by app name.",
+            // Takes no arguments, the same way get_current_date does
+            parameters: {
+                type: "OBJECT",
+                properties: {}
+            },
+            execute: () =>
+                listWindows(),
+            // Read-only, and the answer changes all the time, so never reuse an old result
+            cacheable: false,
+            mutating: false
+        })
+    ],
+    /* Disabled: Jason reads the monitor layout from the screen summary in his context.
+    Remove these comment marks to bring the tool back.
+        [
+        "get_screen_info",
+        capability({
+            name: "get_screen_info",
+            description:
+                "Get the size of each monitor and its work area (the usable area without the taskbar), " +
+                "in screen pixels. The same information is normally already in your context on the " +
+                "Monitors line, so only call this if that line is missing.",
+            // Takes no arguments, like list_windows
+            parameters: {
+                type: "OBJECT",
+                properties: {}
+            },
+            execute: () =>
+                getScreenInfo(),
+            // Read-only; the layout can change when monitors are connected, so never reuse old answers
+            cacheable: false,
+            mutating: false
+        })
+    ],
+    */
+    [
+        "window_action",
+        capability({
+            name: "window_action",
+            description:
+                "To move or resize, give x, y, width, height in screen pixels, using the work area from the " +
+                "Monitors line in your context.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    // Which window: by name...
+                    target: {
+                        type: "STRING",
+                        description: "App name or part of the window title, as shown by list_windows"
+                    },
+                    // ...or exactly, when several windows match
+                    handle: {
+                        type: "NUMBER",
+                        description: "Exact window handle from list_windows or from a candidates list"
+                    },
+                    // What to do
+                    action: {
+                        type: "STRING",
+                        enum: ["focus", "minimize", "maximize", "restore", "close", "move"],
+                        description: "What to do with the window"
+                    },
+                    // Placement (only for action = move). Any value left out stays unchanged.
+                    x: { type: "NUMBER", description: "Left edge in screen pixels (move only)" },
+                    y: { type: "NUMBER", description: "Top edge in screen pixels (move only)" },
+                    width: { type: "NUMBER", description: "Width in pixels (move only)" },
+                    height: { type: "NUMBER", description: "Height in pixels (move only)" },
+                    // The confirmation Jason speaks, written by the model so it is never canned
+                    say: {
+                        type: "STRING",
+                        description:
+                            "One or two short, natural sentences telling the user what you did, " +
+                            "in your own words and voice."
+                    }
+                },
+                required: ["action", "say"]
+            },
+            execute: ({ target, handle, action, x, y, width, height }) =>
+                windowAction({ target, handle, action, x, y, width, height }),
+            mutating: true,
+            // Used only when the action worked; problems and choices go back to the model
+            instantReply: (args, result) => {
+                const say = typeof args.say === "string" ? args.say.trim() : "";
+                return say || `Done, Sir. ${result?.message ?? ""}`.trim();
+            }
+        })
+    ],
+        [
+        "media_control",
+        capability({
+            name: "media_control",
+            description:
+                "Control media playback and the system volume for whatever is playing " +
+                "(Spotify, YouTube in the browser, and so on). Keys: play_pause (pause or resume), " +
+                "next, previous, stop, mute (toggles), volume_up, volume_down, set_volume. " +
+                "For volume_up and volume_down, amount is the percent to change (default 10). " +
+                "For set_volume, amount is the target from 0 to 100.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    key: {
+                        type: "STRING",
+                        enum: ["play_pause", "next", "previous", "stop", "mute", "volume_up", "volume_down", "set_volume"],
+                        description: "What to do"
+                    },
+                    amount: {
+                        type: "NUMBER",
+                        description: "Percent, for the volume keys only"
+                    },
+                    say: {
+                        type: "STRING",
+                        description:
+                            "One short, natural sentence telling the user what you did, in your own words and voice."
+                    }
+                },
+                required: ["key", "say"]
+            },
+            execute: ({ key, amount }) =>
+                mediaControl({ key, amount }),
+            mutating: true,
+            instantReply: (args) =>
+                (typeof args.say === "string" && args.say.trim()) || "Done, Sir."
+        })
+    ],
+        [
+        "system_control",
+        capability({
+            name: "system_control",
+            description:
+                "Control the computer itself. Actions: lock (lock the screen), sleep, " +
+                "shutdown and restart (both start a 30 second countdown that can be cancelled), " +
+                "cancel_shutdown (stop a pending shutdown or restart), " +
+                "set_brightness (value 0 to 100, built-in laptop screens only), " +
+                "set_theme (value dark or light).",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    action: {
+                        type: "STRING",
+                        enum: ["lock", "sleep", "shutdown", "restart", "cancel_shutdown", "set_brightness", "set_theme"],
+                        description: "What to do"
+                    },
+                    value: {
+                        type: "STRING",
+                        description:
+                            "For set_brightness: a number from 0 to 100. For set_theme: dark or light. Not used otherwise."
+                    },
+                    say: {
+                        type: "STRING",
+                        description:
+                            "One short, natural sentence telling the user what you did, in your own words and voice."
+                    }
+                },
+                required: ["action", "say"]
+            },
+            execute: ({ action, value }) =>
+                systemControl({ action, value }),
+            mutating: true,
+            instantReply: (args) =>
+                (typeof args.say === "string" && args.say.trim()) || "Done, Sir."
+        })
+    ],
     
 ]);
 
@@ -790,3 +1069,16 @@ export async function executeCapability(name, args = {}) {
     return item.execute(args);
 }
 
+export function getInstantReply(name, args, result) {
+    const item = getCapability(name);
+
+    if (!item?.instantReply || result?.ok === false) {
+        return null;
+    }
+
+    try {
+        return item.instantReply(args, result) || null;
+    } catch {
+        return null;
+    }
+}

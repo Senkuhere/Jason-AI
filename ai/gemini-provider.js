@@ -95,10 +95,76 @@ function historyToGemini(history) {
     return contents;
 }
 
+const HEDGE_AFTER_MS = Number(process.env.GEMINI_HEDGE_MS) || 5000;
+const MAX_ATTEMPTS = 3;
+
+function isTransient(error) {
+    const status = Number(error?.status ?? error?.code);
+
+    return (
+        status === 429 ||
+        status >= 500 ||
+        /timeout|timed out|ECONN|ETIMEDOUT|fetch failed|overloaded|unavailable|RESOURCE_EXHAUSTED/i
+            .test(String(error?.message))
+    );
+}
+
+// Starts another identical request if the first is slow, and uses whichever finishes first
+function hedgedRequest(makeRequest) {
+    return new Promise((resolve, reject) => {
+        let settled = false;
+        let started = 0;
+        let failed = 0;
+        let timer;
+
+        const onSuccess = value => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            resolve(value);
+        };
+
+        const onFailure = error => {
+            failed++;
+            if (settled) return;
+
+            if (!isTransient(error)) {
+                settled = true;
+                clearTimeout(timer);
+                reject(error);
+                return;
+            }
+
+            if (failed === started) {
+                clearTimeout(timer);
+
+                if (started >= MAX_ATTEMPTS) {
+                    settled = true;
+                    reject(error);
+                } else {
+                    startAttempt();
+                }
+            }
+        };
+
+        const startAttempt = () => {
+            if (settled) return;
+            started++;
+            makeRequest().then(onSuccess, onFailure);
+
+            if (started < MAX_ATTEMPTS) {
+                timer = setTimeout(startAttempt, HEDGE_AFTER_MS);
+            }
+        };
+
+        startAttempt();
+    });
+}
+
 export class GeminiProvider {
     constructor({
         apiKey = process.env.GEMINI_API_KEY,
-        model = "gemini-3.1-flash-lite"
+        model = "gemini-3.5-flash-lite"
     } = {}) {
         this.client = new GoogleGenAI({ apiKey });
         this.model = model;
@@ -109,14 +175,19 @@ export class GeminiProvider {
         systemInstruction,
         tools
     }) {
-        const response = await this.client.models.generateContent({
-            model: this.model,
-            contents: historyToGemini(history),
-            config: {
-                systemInstruction,
-                tools
-            }
-        });
+        const contents = historyToGemini(history);
+
+        const response = await hedgedRequest(() =>
+            this.client.models.generateContent({
+                model: this.model,
+                contents,
+                config: {
+                    systemInstruction,
+                    tools,
+                    thinkingConfig: { thinkingLevel: process.env.GEMINI_THINKING || "MINIMAL" }
+                }
+            })
+        );
 
         const modelContent = response.candidates?.[0]?.content;
 

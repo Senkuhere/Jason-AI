@@ -1,10 +1,15 @@
 import { GoogleGenAI } from "@google/genai";
-import { buildJasonSystemPrompt } from "./personality.js";
+import { buildJasonSystemPrompt, 
+         buildLiveContext 
+    }    from "./personality.js";
+import { getCurrentDate } from "./utility_tools/utility.js";
+
 import {
     getToolDefinitions,
     executeCapability,
     isCacheable,
-    isMutating
+    isMutating,
+    getInstantReply
 } from "./capability-registry.js";
 
 import {
@@ -23,6 +28,11 @@ import {
 } from "./long-term-memory.js";
 
 import { getProviderForRequest } from "./ai/providers.js";
+
+// Background awareness: the active window, open windows and monitor layout
+import { startScreenAwareness,
+         getScreenContext 
+        } from "./utility_tools/computer-control.js";
 
 import { logCapability } from "./capability-logger.js";
 
@@ -220,7 +230,7 @@ ${userMessage}
 `;
 
     const response = await ai.models.generateContent({
-        model: "gemini-3.1-flash-lite",
+        model: "gemini-3.5-flash-lite",
         contents: evaluationPrompt
     });
 
@@ -291,12 +301,19 @@ async function runAgent(
 
     for (let step = 0; step < MAX_AGENT_STEPS; step++) {
         let response;
+        const llmStartedAt = Date.now(); // this checks the time taken for the LLM to respond
+        onEvent({ type: "llm_started", 
+                  name: `step ${step + 1} (${Date.now() - llmStartedAt}ms)` 
+            });
         try {
             response = await provider.generate({
                 history,
                 systemInstruction,
                 tools: getToolDefinitions()
             });
+            onEvent({ type: "llm_finished", 
+                      name: `(${Date.now() - llmStartedAt}ms)` 
+                    });
         } catch (error) {
             const failure = describeError(error);
             
@@ -334,7 +351,8 @@ async function runAgent(
             content: response.text || null,
             toolCalls: functionCalls
         });
-
+        const quickReplies = [];
+        
         for (const functionCall of functionCalls) {
             const args = functionCall.args || {};
             const callKey = getToolCallKey(
@@ -459,12 +477,63 @@ async function runAgent(
                 name: functionCall.name,
                 result
             });
+
+            quickReplies.push(
+                getInstantReply(functionCall.name, args, result)
+            );
+        }
+
+        // Every tool this step finished with a simple confirmation: no need to ask the model again
+        if (quickReplies.length > 0 && quickReplies.every(Boolean)) {
+            return quickReplies.join(" ");
         }
     }
 
     throw new Error(
         "Agent exceeded the maximum number of reasoning steps."
     );
+}
+
+const pendingMemoryTasks = new Set();
+
+async function processLongTermMemory(message, recentMessages, memories, onEvent) {
+    let decision;
+
+    try {
+        decision = await evaluateLongTermMemory(message, recentMessages, memories);
+    } catch (error) {
+        const failure = describeError(error);
+        onEvent({
+            type: "memory_evaluation_failed",
+            errorType: failure.name,
+            error: failure.message
+        });
+        return;
+    }
+
+    try {
+        if (decision.action === "delete" && decision.key) {
+            await deleteLongTermMemory(decision.key);
+        } else if (
+            ["create", "update"].includes(decision.action) &&
+            decision.key && decision.category && decision.content
+        ) {
+            await saveLongTermMemory({
+                key: decision.key,
+                category: decision.category,
+                content: decision.content,
+                importance: decision.importance,
+                confidence: decision.confidence
+            });
+        }
+    } catch (error) {
+        const failure = describeError(error);
+        onEvent({
+            type: "memory_save_failed",
+            errorType: failure.name,
+            error: failure.message
+        });
+    }
 }
 
 export async function sendMessage(
@@ -514,6 +583,7 @@ export async function sendMessage(
     let longTermMemories = [];
 
     if (longTermMemoryAvailable) {
+        const longTermRetrievalStartedAt = Date.now(); // this checks the time taken for the LLM to respond
         try {
             const retrievalQuery = [
                 effectiveMessage,
@@ -527,6 +597,7 @@ export async function sendMessage(
                 retrievalQuery,
                 12
             );
+             onEvent({ type: "memory_retrieval_finished", name: `Long-term memory retrieval (${Date.now() - longTermRetrievalStartedAt}ms)` });
         } catch (error) {
             const failure = describeError(error);
 
@@ -540,15 +611,12 @@ export async function sendMessage(
         }
     }
 
-    const prompt = buildChatPrompt(
-        effectiveMessage,
-        longTermMemories
-    );
+    const prompt = buildLiveContext({
+        currentDate: getCurrentDate(),
+        screenContext: getScreenContext()
+    }) + "\n\n" + buildChatPrompt(effectiveMessage, longTermMemories);
 
-    const systemInstruction = buildJasonSystemPrompt({
-        currentTask: shortTermMemory.currentTask,
-        recentTopics: shortTermMemory.recentTopics
-    });
+    const systemInstruction = buildJasonSystemPrompt();
 
     let selectedProvider;
     try {
@@ -582,77 +650,17 @@ export async function sendMessage(
         onEvent
     );
 
-    let memoryDecision = {
-        action: "none",
-        key: null,
-        category: null,
-        content: null,
-        importance: null,
-        confidence: null
-    };
-
     if (longTermMemoryAvailable) {
-        try {
-            memoryDecision = await evaluateLongTermMemory(
-                effectiveMessage,
-                shortTermMemory.messages.slice(-8),
-                longTermMemories
-            );
-    } catch (error) {
-        const failure = describeError(error);
+        const recentMessages = shortTermMemory.messages.slice(-8);
 
-            onEvent({
-                type: "memory_evaluation_failed",
-                errorType: failure.name,
-                error: failure.message
-            });
-        }
-    }
+        const task = processLongTermMemory(
+            effectiveMessage,
+            recentMessages,
+            longTermMemories,
+            onEvent
+        ).finally(() => pendingMemoryTasks.delete(task));
 
-    if (
-        longTermMemoryAvailable &&
-        memoryDecision.action === "delete" &&
-        memoryDecision.key
-    ) {
-        try {
-            await deleteLongTermMemory(
-                memoryDecision.key
-            );
-        } catch (error) {
-            const failure = describeError(error);
-
-            onEvent({
-                type: "memory_delete_failed",
-                errorType: failure.name,
-                error: failure.message
-            });
-        }
-    }
-
-    if (
-        longTermMemoryAvailable &&
-        ["create", "update"].includes(memoryDecision.action) &&
-        memoryDecision.key &&
-        memoryDecision.category &&
-        memoryDecision.content
-    ) {
-        try {
-            await saveLongTermMemory({
-                key: memoryDecision.key,
-                category: memoryDecision.category,
-                content: memoryDecision.content,
-                importance: memoryDecision.importance,
-                confidence: memoryDecision.confidence
-            });
-        } catch (error) {
-            const failure = describeError(error);
-
-            onEvent({
-                type: "memory_save_failed",
-                errorType: failure.name,
-                error: failure.message
-            });
-        }
+        pendingMemoryTasks.add(task);
     }
 
     updateShortTermMemory("assistant", assistantReply);
@@ -721,6 +729,7 @@ export async function initializeJason() {
 }
 
 export async function shutdownJason() {
+    await Promise.allSettled([...pendingMemoryTasks]);
     try {
         await saveShortTermMemory();
     } catch (error) {

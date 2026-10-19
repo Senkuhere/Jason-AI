@@ -150,7 +150,7 @@ export async function searchWeb(query, maxResults = 5) {
             body: JSON.stringify({
                 api_key: apiKey,
                 query: query.trim(),
-                search_depth: "advanced",
+                search_depth: "basic",
                 topic: "general",
                 max_results: safeMaxResults,
                 include_answer: true,
@@ -192,7 +192,7 @@ export async function searchWeb(query, maxResults = 5) {
         results: (data.results || []).map(result => ({
             title: result.title,
             url: result.url,
-            content: result.content,
+            content: String(result.content || "").slice(0, 400),
             publishedDate: result.published_date || null
         }))
     };
@@ -239,4 +239,37 @@ export function openWebPage(url) {
         url: safeUrl,
         message: "The webpage was opened in the default browser."
     };
+}
+
+export async function searchAndOpen(query, site) {
+    if (typeof query !== "string" || query.trim().length < 2) {
+        throw new Error("A search query is required.");
+    }
+    const apiKey = process.env.TAVILY_API_KEY;
+    if (!apiKey) throw new Error("TAVILY_API_KEY is not configured.");
+
+    const response = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            api_key: apiKey,
+            query: query.trim(),
+            search_depth: "basic",
+            max_results: 3,
+            include_answer: false,
+            ...(site ? { include_domains: [site] } : {})
+        }),
+        signal: AbortSignal.timeout(8000)
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+        throw new Error(`Tavily returned ${response.status}: ${data.detail?.error || data.message || "Unknown error"}`);
+    }
+
+    const top = (data.results || []).find(r => /^https?:\/\//i.test(r.url));
+    if (!top) throw new Error(`No result found for "${query}".`);
+
+    openWebPage(top.url);
+    return { ok: true, url: top.url, title: top.title };
 }
