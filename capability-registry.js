@@ -7,6 +7,10 @@ import {
     listProjectDirectory
 } from "./file_tools/file-tool.js";
 
+import { findFiles, 
+         openFolder 
+} from "./file_tools/file-finder.js";
+
 import {
     calculator,
     getCurrentDate,
@@ -50,8 +54,12 @@ import {
     getScreenInfo,
     windowAction,
     mediaControl,
-    systemControl
+    systemControl,
+    keyboardInput
 } from "./utility_tools/computer-control.js";
+
+import { lookAtScreen 
+} from "./utility_tools/screen-vision.js";
 
 import { readDocument } from "./file_tools/document-reader.js";
 
@@ -64,12 +72,35 @@ function capability({
     mutating = false,
     instantReply = null
 }) {
+    // Tools that can end a request with an instant reply get one extra optional argument.
+    // The model sets it when the user's request still needs more actions after this one,
+    // which stops the instant reply from ending the request too early.
+        const finalParameters = instantReply
+        ? {
+            type: "OBJECT",
+            ...parameters,
+            properties: {
+                ...(parameters?.properties || {}),
+                completesRequest: {
+                    type: "BOOLEAN",
+                    description:
+                        "Set true on the LAST call you make in a response when, once it is done, nothing more " +
+                        "is needed for the user's message. If more actions are still needed afterwards " +
+                        "(for example 'open Notepad and type a list', where the next response types), set false. " +
+                        "Earlier calls in the same response can be left false."
+                }
+            },
+            // Required, so the model must decide on every call instead of forgetting
+            required: [...(parameters?.required || []), "completesRequest"]
+        }
+        : parameters;
+
     return {
         name,
         definition: {
             name,
             description,
-            parameters
+            parameters: finalParameters
         },
         execute,
         cacheable,
@@ -240,7 +271,10 @@ const capabilities = new Map([
         capability({
             name: "calculator",
             description:
-                "Perform basic arithmetic calculations.",
+                "Calculate a mathematical expression. Use this for ALL arithmetic, even simple sums, " +
+                "and never work it out yourself. Pass the expression as the user wrote it. " +
+                "Supports + - * / % ^ and parentheses, plus sqrt, cbrt, abs, round, floor, ceil, " +
+                "sin, cos, tan, log (base 10), ln, exp, pow, min, max, pi, and e.",
             parameters: {
                 type: "OBJECT",
                 properties: {
@@ -382,7 +416,11 @@ const capabilities = new Map([
         },
         execute: ({ query, site }) => searchAndOpen(query, site),
         mutating: true,
-        instantReply: (args) => args.say?.trim() || "Opening it, Sir."
+        // Also say which page was really opened, since the top search result is not always what the user meant
+        instantReply: (args, result) => {
+                const intro = (typeof args.say === "string" && args.say.trim()) || "Opening it, Sir.";
+                return result?.title ? `I opened: "${result.title}".` : intro;
+            }
     })
     ],
     [
@@ -1026,6 +1064,204 @@ const capabilities = new Map([
                 (typeof args.say === "string" && args.say.trim()) || "Done, Sir."
         })
     ],
+        [
+        "find_files",
+        capability({
+            name: "find_files",
+            description:
+                "Search for files and folders by NAME in the user's Desktop, Documents, Downloads, " +
+                "Pictures, Music, and Videos folders. It searches names only, never file contents. " +
+                "Use it when the user mentions a file or folder and you do not have its exact path. " +
+                "Use a few distinctive words from the name, not a whole sentence. " +
+                "To find files by type, pass extension (for example pdf) with or without a query. " +
+                "Returns up to 15 matches, best name match first, then newest. " +
+                "Afterwards use open_or_run_file or read_document with the returned path, " +
+                "or open_folder to show it in File Explorer. " +
+                "If nothing is found, say which folders were searched and ask for another name or the full path.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    query: {
+                        type: "STRING",
+                        description: "Words from the file or folder name, for example: resume or budget 2026"
+                    },
+                    type: {
+                        type: "STRING",
+                        enum: ["file", "folder", "any"],
+                        description: "Only files, only folders, or either. Default any."
+                    },
+                    extension: {
+                        type: "STRING",
+                        description: "Optional file extension such as pdf, docx, mp3"
+                    },
+                    folder: {
+                        type: "STRING",
+                        description: "Optional: limit the search to Desktop, Documents, Downloads, Pictures, Music, or Videos"
+                    }
+                }
+            },
+            execute: ({ query, type, extension, folder }) =>
+                findFiles({ query, type, extension, folder }),
+            cacheable: false,
+            mutating: false
+        })
+    ],
+    [
+        "open_folder",
+        capability({
+            name: "open_folder",
+            description:
+                "Open a folder in File Explorer, or show a file highlighted inside its folder. " +
+                "Accepts a full path, or one of these names: Desktop, Documents, Downloads, Pictures, Music, Videos. " +
+                "Only works inside those folders and the project folder. " +
+                "To open a file itself, use open_or_run_file instead.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    folderPath: {
+                        type: "STRING",
+                        description: "A folder name such as Downloads, or a full path to a folder or file"
+                    },
+                    say: {
+                        type: "STRING",
+                        description:
+                            "One short, natural sentence telling the user what you opened, in your own words and voice."
+                    }
+                },
+                required: ["folderPath", "say"]
+            },
+            execute: ({ folderPath }) =>
+                openFolder({ folderPath }),
+            mutating: true,
+            instantReply: (args) =>
+                (typeof args.say === "string" && args.say.trim()) || "Opened it, Sir."
+        })
+    ],
+        [
+        "look_at_screen",
+        capability({
+            name: "look_at_screen",
+            description:
+                "Take a screenshot and answer a question about what is visible on it. " +
+                "Use this whenever the user asks what is on the screen, what an error says, " +
+                "what is playing or shown, or anything about the contents of a window. " +
+                "The window list in your context only has titles, not contents. " +
+                "A separate vision step sees only the picture and your question, so write the question " +
+                "in full (for example: 'What error message is shown, and what does it say?'). " +
+                "target: screen (the main monitor, default), all_screens, or window " +
+                "(then give windowName, or handle from list_windows; it is brought to the front first). " +
+                "Use detail high only when text is very small. " +
+                "Do not look at the screen unless the question needs it.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    question: {
+                        type: "STRING",
+                        description: "A complete question about what is on the screen"
+                    },
+                    target: {
+                        type: "STRING",
+                        enum: ["screen", "all_screens", "window"],
+                        description: "What to capture. Default screen."
+                    },
+                    windowName: {
+                        type: "STRING",
+                        description: "For target window: the app name or part of the title"
+                    },
+                    handle: {
+                        type: "NUMBER",
+                        description: "For target window: an exact window handle from list_windows"
+                    },
+                    detail: {
+                        type: "STRING",
+                        enum: ["normal", "high"],
+                        description: "high for very small text. Default normal."
+                    },
+                    say: {
+                        type: "STRING",
+                        description:
+                            "One short, natural sentence saying you are about to look, in your own voice."
+                    }
+                },
+                required: ["question", "say"]
+            },
+            execute: ({ question, target, windowName, handle, detail }) =>
+                lookAtScreen({ question, target, windowName, handle, detail }),
+            cacheable: false,
+            // True because a window capture can bring that window forward, and it also stops
+            // the same capture from being repeated over and over in one request
+            mutating: true,
+            // The vision answer is already written for the user, so no second model call is needed.
+            // If you later want Jason to act on what he sees, delete this line.
+            instantReply: (args, result) => result?.answer || null
+        })
+    ],
+        [
+        "keyboard_input",
+        capability({
+            name: "keyboard_input",
+            description:
+                "Type text, or press keys, in an open program, as if the user were using the keyboard. " +
+                "action type: types the text (set pressEnter true to also press Enter, for search boxes and chat fields). " +
+                "action press: presses a key or combination such as enter, tab, esc, f5, ctrl+s, ctrl+shift+t, " +
+                "alt+left, or an arrow key; times repeats it (up to 20). " +
+                "You must name the window in target (an app name or part of the title), " +
+                "or use target active only when the user says to type in the current window. " +
+                "The window is brought to the front first. You cannot see where the cursor is, " +
+                "so only type when the destination is clear; use look_at_screen if unsure. " +
+                "Blocked: Windows-key shortcuts, Alt+F4, and typing into terminals. " +
+                "Never type passwords or secrets.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    action: {
+                        type: "STRING",
+                        enum: ["type", "press"],
+                        description: "type to enter text, press for a key or key combination"
+                    },
+                    text: {
+                        type: "STRING",
+                        description: "For action type: the exact text to type"
+                    },
+                    keys: {
+                        type: "STRING",
+                        description: "For action press: a key or combination joined with +, for example ctrl+s"
+                    },
+                    times: {
+                        type: "NUMBER",
+                        description: "For action press: how many times to press it. Default 1."
+                    },
+                    pressEnter: {
+                        type: "BOOLEAN",
+                        description: 
+                            "For action type: set true ONLY if the user asked to press Enter, submit, " +
+                            "search, or start a new line afterwards. Default false."
+                    },
+                    target: {
+                        type: "STRING",
+                        description: "App name or part of the window title to type into, or active for the focused window"
+                    },
+                    handle: {
+                        type: "NUMBER",
+                        description: "Optional exact window handle from list_windows"
+                    },
+                    say: {
+                        type: "STRING",
+                        description:
+                            "One short, natural sentence in the present tense saying what you are doing, " +
+                            "for example 'Typing that into Notepad now, Sir.' Never say it worked or is done."
+                    }
+                },
+                required: ["action", "target", "say"]
+            },
+            execute: ({ action, text, keys, times, pressEnter, target, handle }) =>
+                keyboardInput({ action, text, keys, times, pressEnter, target, handle }),
+            // Changes the state of a program, and stops the same input being sent twice in one request
+            mutating: true,
+            instantReply: (args) =>
+                (typeof args.say === "string" && args.say.trim()) || "Done, Sir."
+        })
+    ],
     
 ]);
 
@@ -1069,10 +1305,18 @@ export async function executeCapability(name, args = {}) {
     return item.execute(args);
 }
 
-export function getInstantReply(name, args, result) {
+export function getInstantReply(name, args, result, isLastCall = true) {
     const item = getCapability(name);
 
+    // No instant reply if the tool failed, or if the model said more steps are still needed
+    // No instant reply if the tool does not support it, or if it failed
     if (!item?.instantReply || result?.ok === false) {
+        return null;
+    }
+
+    // Only the LAST call of a step decides whether the whole request is finished.
+    // Earlier calls in the same step were already part of that step, so their sentence just joins in.
+    if (isLastCall && args?.completesRequest !== true) {
         return null;
     }
 

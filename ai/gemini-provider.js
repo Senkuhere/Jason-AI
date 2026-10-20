@@ -1,4 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
+import { randomUUID } from "node:crypto";
 
 function historyToGemini(history) {
     const contents = [];
@@ -98,7 +99,8 @@ function historyToGemini(history) {
 const HEDGE_AFTER_MS = Number(process.env.GEMINI_HEDGE_MS) || 5000;
 const MAX_ATTEMPTS = 3;
 
-function isTransient(error) {
+// Exported so the fallback logic can tell a temporary Gemini problem from a real bug
+export function isTransient(error) {
     const status = Number(error?.status ?? error?.code);
 
     return (
@@ -194,14 +196,20 @@ export class GeminiProvider {
         const toolCalls = (modelContent?.parts || [])
             .filter(part => part.functionCall)
             .map((part, index) => ({
-                id: `gemini-call-${index}`,
+                // A random part makes every id unique across the whole request
+                id: `gemini-call-${randomUUID().slice(0, 8)}-${index}`,
                 name: part.functionCall.name,
                 args: part.functionCall.args || {}, 
                 thoughtSignature: part.thoughtSignature
             }));
 
         return {
-            text: response.text || "",
+            // Join the text parts by hand, because response.text prints a warning
+            // whenever the reply also contains a tool call
+            text: (modelContent?.parts || [])
+                .filter(part => part.text && !part.thought)
+                .map(part => part.text)
+                .join(""),
             toolCalls
         };
     }

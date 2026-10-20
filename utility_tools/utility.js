@@ -1,27 +1,72 @@
 import { spawn } from "node:child_process";
 
+// Everything the calculator understands besides numbers and + - * / % ^ ( ) , 
+// (each word maps to its JavaScript equivalent)
+const CALCULATOR_WORDS = {
+    sqrt: "Math.sqrt", sqr: "Math.sqrt", cbrt: "Math.cbrt",
+    abs: "Math.abs", round: "Math.round", floor: "Math.floor", ceil: "Math.ceil",
+    sin: "Math.sin", cos: "Math.cos", tan: "Math.tan",
+    asin: "Math.asin", acos: "Math.acos", atan: "Math.atan",
+    log: "Math.log10",        // log means base 10, like on a calculator
+    log10: "Math.log10", log2: "Math.log2",
+    ln: "Math.log",           // ln is the natural logarithm
+    exp: "Math.exp", pow: "Math.pow", min: "Math.min", max: "Math.max",
+    pi: "Math.PI", e: "Math.E"
+};
+
+// Matches any of those words as a whole word
+const CALCULATOR_WORD_PATTERN = new RegExp(
+    `\\b(${Object.keys(CALCULATOR_WORDS).join("|")})\\b`,
+    "g"
+);
+
 export function calculator(expression) {
     if (typeof expression !== "string" || expression.trim() === "") {
         throw new Error("A mathematical expression is required.");
     }
 
-    const normalizedExpression = expression.replace(/\s+/g, "");
+    if (expression.length > 200) {
+        throw new Error("The expression is too long.");
+    }
 
-    if (!/^[0-9.+\-*/%()]+$/.test(normalizedExpression)) {
+    // Turn friendly symbols into the ones JavaScript understands
+    const text = expression
+        .toLowerCase()
+        .replace(/×/g, "*")                       // 3 × 4
+        .replace(/÷/g, "/")                       // 12 ÷ 4
+        .replace(/√/g, "sqrt")                    // √9
+        .replace(/\^/g, "**")                     // 2 ^ 3 means two to the power of three
+        .replace(/(\d)\s*x\s*(?=\d)/g, "$1*");    // "3 x 4" means three times four
+
+    // Safety check: after removing the allowed words and symbols, nothing may be left over
+    const leftovers = text
+        .replace(CALCULATOR_WORD_PATTERN, "")
+        .replace(/[0-9.+\-*/%(),\s]/g, "");
+
+    if (leftovers.length > 0) {
         throw new Error(
-            "Only numbers and arithmetic operators are allowed."
+            `The calculator cannot use "${leftovers}". It understands numbers, + - * / % ^ ( ), ` +
+            `and these words: ${Object.keys(CALCULATOR_WORDS).join(", ")}.`
         );
     }
 
-    const result = Function(
-        `"use strict"; return (${normalizedExpression});`
-    )();
+    // Replace each allowed word with its JavaScript version (for example sqrt becomes Math.sqrt)
+    const code = text.replace(CALCULATOR_WORD_PATTERN, word => CALCULATOR_WORDS[word]);
 
-    if (!Number.isFinite(result)) {
+    let result;
+
+    try {
+        result = Function(`"use strict"; return (${code});`)();
+    } catch {
+        throw new Error("That is not a valid mathematical expression.");
+    }
+
+    if (typeof result !== "number" || !Number.isFinite(result)) {
         throw new Error("The calculation did not produce a finite number.");
     }
 
-    return result;
+    // Removes tiny rounding noise, so 0.1 + 0.2 gives 0.3 instead of 0.30000000000000004
+    return Number(result.toPrecision(15));
 }
 
 // Get the current date and time in the user's timezone

@@ -1,9 +1,10 @@
 import pg from "pg";
 
-
+// The memories, kept in RAM so most requests never wait for the database
 let memoryCache = null;
-let memoryCacheAt = 0;
-const MEMORY_CACHE_MS = 5 * 60 * 1000;
+let memoryCacheAt = 0;                 // when the RAM copy was last read from the database
+let refreshInProgress = null;          // a background refresh that is running right now, if any
+const MEMORY_CACHE_MS = 30 * 60 * 1000;
 
 const { Pool } = pg;
 
@@ -64,6 +65,7 @@ function countMatches(memory, queryTokens) {
 
     return matches;
 }
+
 
 export async function getLongTermMemories(query = "", limit = 12) {
 
@@ -135,7 +137,8 @@ export async function saveLongTermMemory({
             confidence
         ]
     );
-    memoryCache = null; // Invalidate cache
+    // Keep the RAM copy in step with the database, so the next request needs no database read
+    cacheUpsert(result.rows[0]);
     return result.rows[0];
 }
 
@@ -152,23 +155,67 @@ export async function deleteLongTermMemory(key) {
         `,
         [key]
     );
-    memoryCache = null; // Invalidate cache
+    // Remove it from the RAM copy as well
+    if (result.rows[0]) cacheRemove(key);
     return result.rows[0] || null;
 }
 
+// Reads every memory from the database and stores the result in RAM
+function fetchAllMemories() {
+    return pool
+        .query(`
+            SELECT id, memory_key, category, content, importance,
+                   confidence, created_at, updated_at
+            FROM long_term_memories
+            WHERE deleted_at IS NULL
+            ORDER BY importance DESC, updated_at DESC
+            LIMIT 300
+        `)
+        .then(result => {
+            memoryCache = result.rows;
+            memoryCacheAt = Date.now();
+            return memoryCache;
+        });
+}
+
 async function loadAllMemories() {
-    if (memoryCache && Date.now() - memoryCacheAt < MEMORY_CACHE_MS) return memoryCache;
+    // Recent enough: use the RAM copy
+    if (memoryCache && Date.now() - memoryCacheAt < MEMORY_CACHE_MS) {
+        return memoryCache;
+    }
 
-    const result = await pool.query(`
-        SELECT id, memory_key, category, content, importance,
-               confidence, created_at, updated_at
-        FROM long_term_memories
-        WHERE deleted_at IS NULL
-        ORDER BY importance DESC, updated_at DESC
-        LIMIT 300
-    `);
+    // Old but present: answer right away with it, and refresh quietly in the background for next time.
+    // (A cold database connection can take a second or two, and nobody should wait for that.)
+    if (memoryCache) {
+        refreshInProgress ??= fetchAllMemories()
+            .catch(() => {})                         // if the refresh fails, keep the old copy
+            .finally(() => { refreshInProgress = null; });
 
-    memoryCache = result.rows;
-    memoryCacheAt = Date.now();
-    return memoryCache;
+        return memoryCache;
+    }
+
+    // Nothing in RAM yet: this one has to wait for the database
+    return fetchAllMemories();
+}
+
+// After a save, put the new or changed memory into the RAM copy, so no database read is needed
+function cacheUpsert(row) {
+    if (!memoryCache) return;   // nothing cached yet; the next load reads everything anyway
+
+    memoryCache = memoryCache.filter(item => item.memory_key !== row.memory_key);
+    memoryCache.push(row);
+
+    // Same order as the database query: most important first, then most recently updated
+    memoryCache.sort(
+        (first, second) =>
+            Number(second.importance) - Number(first.importance) ||
+            new Date(second.updated_at) - new Date(first.updated_at)
+    );
+}
+
+// After a delete, remove the memory from the RAM copy
+function cacheRemove(key) {
+    if (!memoryCache) return;
+
+    memoryCache = memoryCache.filter(item => item.memory_key !== key);
 }

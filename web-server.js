@@ -4,6 +4,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { getLongTermMemories } from "./long-term-memory.js";
+
 import {
     initializeJason,
     shutdownJason,
@@ -397,7 +399,9 @@ const server = http.createServer(async (request, response) => {
 async function start() {
     try {
         const status = await initializeJason();
-
+        // Load the memories into RAM now, so the first message is not slowed down
+        void getLongTermMemories("").catch(() => {});
+            
         if (!status.longTermMemoryAvailable) {
             console.warn(
                 "Long-term memory is disabled."

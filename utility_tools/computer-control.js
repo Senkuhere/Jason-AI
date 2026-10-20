@@ -336,6 +336,53 @@ export function chooseApp(query, apps) {
 
 // ---------- 3. The tool Jason calls ----------
 
+// Waits until Windows shows a window that was not open before, or until a different window comes
+// to the front (which is what happens when an app that is already running gets activated).
+// Returns true if either happened within the time limit.
+async function waitForAppWindow(windowsBefore, timeoutMs) {
+    // What was open before the launch, and which window had focus
+    const handlesBefore = new Set(windowsBefore.map(item => item.handle));
+    const activeBefore = windowsBefore.find(item => item.active)?.handle;
+
+    const deadline = Date.now() + timeoutMs;
+
+    while (Date.now() < deadline) {
+        await pause(250);   // check four times a second
+
+        const windows = await worker.request("list", {}, 5_000).catch(() => []);
+
+        // A window that did not exist before, or focus moving to a different window
+        const newWindow = windows.some(item => !handlesBefore.has(item.handle));
+        const newActive = windows.find(item => item.active)?.handle;
+        const focusMoved = newActive !== undefined && newActive !== activeBefore;
+
+        if (newWindow || focusMoved) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+// Starts an installed app the same way the Start menu does.
+// Returns an error message, or null if it started.
+async function startInstalledApp(match) {
+    try {
+        await executeFile(
+            "explorer.exe",
+            [`shell:AppsFolder\\${match.appId}`],
+            { windowsHide: true, timeout: 10_000 }
+        );
+    } catch (error) {
+        // explorer.exe often reports exit code 1 even when the app started fine
+        if (error.code !== 1) {
+            return `Could not start ${match.name}: ${error.message}`;
+        }
+    }
+
+    return null;
+}
+
 export async function launchApp(name) {
     if (typeof name !== "string" || !name.trim()) {
         throw new Error("An app name is required.");
@@ -355,22 +402,50 @@ export async function launchApp(name) {
         };
     }
 
-    try {
-        // This is the same thing that happens when you click the app in the Start menu
-        await executeFile(
-            "explorer.exe",
-            [`shell:AppsFolder\\${match.appId}`],
-            { windowsHide: true, timeout: 10_000 }
-        );
-    } catch (error) {
-        // explorer.exe often reports exit code 1 even when the app started fine
-        if (error.code !== 1) {
-            return {
-                ok: false,
-                error: `Could not start ${match.name}: ${error.message}`
-            };
+    // The windows open right now, so we can tell whether the launch produced a new one
+    const windowsBefore = await worker.request("list", {}, 5_000).catch(() => []);
+
+    // If a window of this app is already open, launching just brings it forward,
+    // so there is nothing to wait for
+    const existing = resolveWindow(windowsBefore, match.name);
+    const alreadyOpen =
+        Boolean(existing.window) || /More than one window/.test(existing.error || "");
+
+    const firstError = await startInstalledApp(match);
+
+    if (firstError) {
+        return { ok: false, error: firstError };
+    }
+
+    let windowAppeared = alreadyOpen;
+
+    if (!alreadyOpen) {
+        // Wait up to 6 seconds for the window to show up
+        windowAppeared = await waitForAppWindow(windowsBefore, 6_000);
+
+        // Nothing showed up. Starting a store app for the first time can silently do nothing,
+        // so start it one more time and give it a little longer.
+        if (!windowAppeared) {
+            const retryError = await startInstalledApp(match);
+
+            if (retryError) {
+                return { ok: false, error: retryError };
+            }
+
+            windowAppeared = await waitForAppWindow(windowsBefore, 8_000);
         }
     }
+
+    // Still nothing: say so honestly, instead of claiming it opened
+    if (!windowAppeared) {
+        return {
+            ok: false,
+            error: `${match.name} was started twice, but no window appeared. It may still be loading.`
+        };
+    }
+
+    // Remember the moment, so keyboard_input knows to wait for this app's window if needed
+    lastLaunchAt = Date.now();
 
     return {
         ok: true,
@@ -391,7 +466,7 @@ export async function launchApp(name) {
 // It is compiled ONCE into a DLL in your temp folder; later starts just load the DLL.
 // If you ever change the C# code, change the version in DLL_NAME (v2 -> v3)
 // so the old compiled copy is not reused.
-const DLL_NAME = "JasonWin-v3.dll";
+const DLL_NAME = "JasonWin-v5.dll";
 
 const CSHARP_SOURCE = `
 using System;
@@ -484,6 +559,54 @@ public static class JasonWin
     [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out int value, int size);
     [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] private static extern int DwmGetWindowRect(IntPtr hWnd, int attribute, out RECT value, int size);
     [DllImport("user32.dll")] private static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+
+
+        // ---- Keyboard input (typing text and pressing key combinations) ----
+    private const uint InputKeyboard = 1;       // the kind of input we send: a keyboard event
+    private const uint KeyExtended = 0x0001;    // flag: an "extended" key (arrows, Delete, Win...)
+    private const uint KeyUp = 0x0002;          // flag: the key is being released, not pressed
+    private const uint KeyUnicode = 0x0004;     // flag: wScan holds a Unicode character instead of a key code
+
+    // Windows wants one fixed-size record per input, built from the three pieces below.
+    // The mouse piece is never used, but it has to be here so the record has the right size.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MOUSEINPUT
+    {
+        public int dx;
+        public int dy;
+        public uint mouseData;
+        public uint dwFlags;
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct KEYBDINPUT
+    {
+        public ushort wVk;          // which key (a virtual key code), or 0 when typing a Unicode character
+        public ushort wScan;        // the Unicode character, when KeyUnicode is set
+        public uint dwFlags;        // KeyUp, KeyUnicode, KeyExtended
+        public uint time;
+        public IntPtr dwExtraInfo;
+    }
+
+    // A keyboard record and a mouse record share the same memory, so they overlap at position 0
+    [StructLayout(LayoutKind.Explicit)]
+    private struct InputUnion
+    {
+        [FieldOffset(0)] public MOUSEINPUT mi;
+        [FieldOffset(0)] public KEYBDINPUT ki;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct INPUT
+    {
+        public uint type;
+        public InputUnion u;
+    }
+
+    // Sends keystrokes to whichever window currently has focus
+    [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, INPUT[] inputs, int size);
 
     // The rectangle the user actually SEES (Windows adds invisible borders to the "official" one)
     private static RECT GetVisibleRect(IntPtr hWnd)
@@ -623,7 +746,190 @@ public static class JasonWin
         }
     }
 
-        // Presses and releases one key the given number of times (used for media and volume keys)
+        // Builds one keyboard event (one key going down, or one key coming up)
+    private static INPUT MakeKey(ushort vk, ushort scan, uint flags)
+    {
+        INPUT input = new INPUT();
+        input.type = InputKeyboard;
+        input.u.ki.wVk = vk;
+        input.u.ki.wScan = scan;
+        input.u.ki.dwFlags = flags;
+        return input;
+    }
+
+    // Sends a list of keyboard events to Windows, in small batches so a long text
+    // does not overwhelm the window that is receiving it
+    private static void Send(List<INPUT> inputs)
+    {
+        for (int start = 0; start < inputs.Count; start += 100)
+        {
+            int count = Math.Min(100, inputs.Count - start);
+            INPUT[] batch = inputs.GetRange(start, count).ToArray();
+
+            uint sent = SendInput((uint)batch.Length, batch, Marshal.SizeOf(typeof(INPUT)));
+
+            // Windows refuses input for windows running as administrator, and returns fewer than we sent
+            if (sent != batch.Length)
+            {
+                throw new Exception("Windows blocked the keystrokes. The window may be running as administrator.");
+            }
+
+            // A tiny pause between batches of a long text
+            if (inputs.Count > 100) System.Threading.Thread.Sleep(10);
+        }
+    }
+
+    // Types text into the focused window, one character at a time. Returns how many characters were sent.
+        // Types text into the focused window. Each character is sent on its own with a tiny pause,
+    // because some programs drop or scramble characters that arrive in one burst.
+    // Returns how many characters were sent.
+    public static int TypeText(string text)
+    {
+        int typed = 0;
+
+        foreach (char c in text)
+        {
+            // Windows only needs the line feed, so skip the carriage return of a Windows line break
+            if (c == '\\r') continue;
+
+            List<INPUT> inputs = new List<INPUT>();
+
+            if (c == '\\n')
+            {
+                // A new line is the Enter key (key code 0x0D), pressed and released
+                inputs.Add(MakeKey(0x0D, 0, 0));
+                inputs.Add(MakeKey(0x0D, 0, KeyUp));
+            }
+            else if (c == '\\t')
+            {
+                // A tab is the Tab key (key code 0x09)
+                inputs.Add(MakeKey(0x09, 0, 0));
+                inputs.Add(MakeKey(0x09, 0, KeyUp));
+            }
+            else
+            {
+                // Everything else is sent as a Unicode character, so accents, symbols and emoji all work
+                inputs.Add(MakeKey(0, c, KeyUnicode));
+                inputs.Add(MakeKey(0, c, KeyUnicode | KeyUp));
+            }
+
+            // Send this one character, then wait a few milliseconds. The first half of an emoji
+            // is followed immediately by its second half, so there is no pause between the two.
+            Send(inputs);
+            if (!char.IsHighSurrogate(c)) System.Threading.Thread.Sleep(4);
+
+            typed++;
+        }
+
+        return typed;
+    }
+
+    // Turns a key name such as "ctrl", "enter", "f5" or "s" into a Windows key code.
+    // "extended" is set for keys Windows treats as extended (arrows, Delete, Win...).
+    private static ushort KeyCode(string name, out bool extended)
+    {
+        extended = false;
+
+        switch (name)
+        {
+            case "ctrl": case "control": return 0x11;
+            case "shift": return 0x10;
+            case "alt": return 0x12;
+            case "win": case "windows": extended = true; return 0x5B;
+            case "enter": case "return": return 0x0D;
+            case "tab": return 0x09;
+            case "esc": case "escape": return 0x1B;
+            case "space": return 0x20;
+            case "backspace": return 0x08;
+            case "delete": case "del": extended = true; return 0x2E;
+            case "insert": extended = true; return 0x2D;
+            case "home": extended = true; return 0x24;
+            case "end": extended = true; return 0x23;
+            case "pageup": extended = true; return 0x21;
+            case "pagedown": extended = true; return 0x22;
+            case "left": extended = true; return 0x25;
+            case "up": extended = true; return 0x26;
+            case "right": extended = true; return 0x27;
+            case "down": extended = true; return 0x28;
+            // A few punctuation keys that are common in shortcuts (ctrl+= and ctrl+- zoom, for example)
+            case ",": return 0xBC;
+            case ".": return 0xBE;
+            case "-": return 0xBD;
+            case "=": return 0xBB;
+            case "/": return 0xBF;
+            case ";": return 0xBA;
+            case "[": return 0xDB;
+            case "]": return 0xDD;
+        }
+
+        // Function keys: f1 to f12 are key codes 0x70 to 0x7B
+        if (name.Length >= 2 && name[0] == 'f')
+        {
+            int number;
+
+            if (int.TryParse(name.Substring(1), out number) && number >= 1 && number <= 12)
+            {
+                return (ushort)(0x70 + number - 1);
+            }
+        }
+
+        // A single letter or digit: its key code is simply the uppercase character
+        if (name.Length == 1 && name[0] < 128 && char.IsLetterOrDigit(name[0]))
+        {
+            return (ushort)char.ToUpper(name[0]);
+        }
+
+        throw new Exception("Unknown key: " + name);
+    }
+
+    // Presses a key combination such as "ctrl+shift+t" (or a single key such as "enter"),
+    // the given number of times
+    public static string PressKeys(string combo, int times)
+    {
+        string[] names = combo.ToLower().Split('+');
+        List<ushort> codes = new List<ushort>();
+        List<uint> extras = new List<uint>();   // KeyExtended for extended keys, otherwise 0
+
+        foreach (string rawName in names)
+        {
+            bool extended;
+            codes.Add(KeyCode(rawName.Trim(), out extended));
+            extras.Add(extended ? KeyExtended : 0);
+        }
+
+        // All keys except the last are held down; the last one is tapped
+        int last = codes.Count - 1;
+
+        for (int round = 0; round < times; round++)
+        {
+            List<INPUT> inputs = new List<INPUT>();
+
+            // Hold down the first keys (for ctrl+shift+t: ctrl, then shift)
+            for (int i = 0; i < last; i++)
+            {
+                inputs.Add(MakeKey(codes[i], 0, extras[i]));
+            }
+
+            // Tap the last key: press, then release
+            inputs.Add(MakeKey(codes[last], 0, extras[last]));
+            inputs.Add(MakeKey(codes[last], 0, extras[last] | KeyUp));
+
+            // Let go of the held keys in reverse order
+            for (int i = last - 1; i >= 0; i--)
+            {
+                inputs.Add(MakeKey(codes[i], 0, extras[i] | KeyUp));
+            }
+
+            Send(inputs);
+
+            // A short gap so repeated presses are not merged into one
+            if (times > 1) System.Threading.Thread.Sleep(40);
+        }
+
+        return "pressed " + combo + (times > 1 ? " " + times + " times" : "");
+    }
+
+    // Presses and releases one key the given number of times (used for media and volume keys)
     private static void TapKey(byte vk, int times)
     {
         for (int i = 0; i < times; i++)
@@ -823,6 +1129,80 @@ function Invoke-JasonMedia($request) {
     return [pscustomobject]@{ message = $message }
 }
 
+# Takes a screenshot of one rectangle of the screen, shrinks it, and returns it as a base64 JPEG
+function Invoke-JasonCapture($request) {
+    # Loads Windows' drawing library (a few milliseconds, only slow the first time)
+    Add-Type -AssemblyName System.Drawing
+
+    # Touching the helper once makes sure the "real pixels" setting is active,
+    # otherwise a scaled display would capture the wrong area
+    [void][JasonWin]::GetMonitors()
+
+    # The area to capture, in screen pixels (Node worked these numbers out)
+    $left   = [int]$request.left
+    $top    = [int]$request.top
+    $width  = [int]$request.width
+    $height = [int]$request.height
+    $maxEdge = [int]$request.maxEdge
+
+    # Copy that part of the screen into a bitmap image in memory
+    $full = New-Object System.Drawing.Bitmap($width, $height)
+    $graphics = [System.Drawing.Graphics]::FromImage($full)
+    $graphics.CopyFromScreen($left, $top, 0, 0, $full.Size)
+    $graphics.Dispose()
+
+    # Shrink so the longest side is at most maxEdge. A smaller picture means a faster, cheaper
+    # vision request. Min(1.0, ...) makes sure a small capture is never stretched bigger.
+    $scale = [Math]::Min(1.0, $maxEdge / [double][Math]::Max($width, $height))
+    $outWidth  = [Math]::Max(1, [int][Math]::Round($width * $scale))
+    $outHeight = [Math]::Max(1, [int][Math]::Round($height * $scale))
+
+    $small = New-Object System.Drawing.Bitmap($outWidth, $outHeight)
+    $shrinker = [System.Drawing.Graphics]::FromImage($small)
+    # High quality resizing keeps small text readable
+    $shrinker.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $shrinker.DrawImage($full, 0, 0, $outWidth, $outHeight)
+    $shrinker.Dispose()
+    $full.Dispose()
+
+    # Save as a JPEG at quality 80 into memory (nothing is written to disk)
+    $jpegEncoder = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() |
+        Where-Object { $_.MimeType -eq 'image/jpeg' }
+    $encoderSettings = New-Object System.Drawing.Imaging.EncoderParameters(1)
+    $encoderSettings.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter(
+        [System.Drawing.Imaging.Encoder]::Quality, [long]80)
+
+    $stream = New-Object System.IO.MemoryStream
+    $small.Save($stream, $jpegEncoder, $encoderSettings)
+    $small.Dispose()
+
+    # JSON can only carry text, so the picture travels as base64 text
+    $base64 = [Convert]::ToBase64String($stream.ToArray())
+    $stream.Dispose()
+
+    return [pscustomobject]@{
+        mimeType = 'image/jpeg'
+        width    = $outWidth
+        height   = $outHeight
+        data     = $base64
+    }
+}
+
+# Types text, or presses a key combination, in whichever window currently has focus
+function Invoke-JasonKeys($request) {
+    if ($request.mode -eq 'type') {
+        # The text arrives as base64, so accents, symbols and emoji survive the trip through the console
+        $text = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([string]$request.textBase64))
+        $count = [JasonWin]::TypeText($text)
+        return [pscustomobject]@{ message = "typed $count characters" }
+    }
+
+    # Otherwise it is a key combination, repeated "times" times (default once)
+    $times = if ($null -ne $request.times) { [int]$request.times } else { 1 }
+    $message = [JasonWin]::PressKeys([string]$request.keys, $times)
+    return [pscustomobject]@{ message = $message }
+}
+
 # Tell Node we are ready, then answer requests until Node closes the connection
 [Console]::Out.WriteLine('{"ready":true}')
 
@@ -845,6 +1225,8 @@ while ($true) {
             'monitors' { $data = @(Get-JasonMonitors) }
             'act'      { $data = Invoke-JasonAction $request }
             'media'    { $data = Invoke-JasonMedia $request }
+            'capture'  { $data = Invoke-JasonCapture $request }
+            'keys'     { $data = Invoke-JasonKeys $request }
             default    { throw "Unknown command: $($request.cmd)" }
         }
 
@@ -1324,6 +1706,347 @@ export async function systemControl({ action, value } = {}) {
             return finish(`Windows was switched to ${mode} mode.`);
         }
     }
+}
+
+// ---------- Screenshots ----------
+
+// Waits a moment (restoring or focusing a window needs time to repaint before a screenshot)
+const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+// The full area covered by all monitors together: the leftmost, topmost, rightmost and bottommost edges
+function desktopBounds(monitors) {
+    return {
+        left: Math.min(...monitors.map(monitor => monitor.left)),
+        top: Math.min(...monitors.map(monitor => monitor.top)),
+        right: Math.max(...monitors.map(monitor => monitor.left + monitor.width)),
+        bottom: Math.max(...monitors.map(monitor => monitor.top + monitor.height))
+    };
+}
+
+// Cuts a rectangle down to the part that is really on a screen. A window dragged half
+// off-screen would otherwise capture a black strip.
+function clampToDesktop(rect, monitors) {
+    const bounds = desktopBounds(monitors);
+
+    const left = Math.max(rect.left, bounds.left);
+    const top = Math.max(rect.top, bounds.top);
+    const right = Math.min(rect.left + rect.width, bounds.right);
+    const bottom = Math.min(rect.top + rect.height, bounds.bottom);
+
+    return { left, top, width: right - left, height: bottom - top };
+}
+
+// Takes a screenshot and returns it as base64 JPEG data (it is never saved to disk).
+// target: "screen" (the main monitor), "all_screens", or "window" (one window, found by name or handle)
+export async function captureScreen({ target = "screen", windowName, handle, detail = "normal" } = {}) {
+    if (!["screen", "all_screens", "window"].includes(target)) {
+        throw new Error('target must be "screen", "all_screens", or "window".');
+    }
+
+    // The monitor layout tells us where the screen is, in real pixels
+    const monitors = await worker.request("monitors", {}, 5_000);
+
+    let rect;   // the area to capture
+    let what;   // a short description of it, used in the vision prompt
+
+    if (target === "screen") {
+        // The main monitor (the one marked primary)
+        const primary = monitors.find(monitor => monitor.primary) || monitors[0];
+
+        rect = {
+            left: primary.left,
+            top: primary.top,
+            width: primary.width,
+            height: primary.height
+        };
+        what = "the main screen";
+    } else if (target === "all_screens") {
+        // Every monitor in one picture
+        const bounds = desktopBounds(monitors);
+
+        rect = {
+            left: bounds.left,
+            top: bounds.top,
+            width: bounds.right - bounds.left,
+            height: bounds.bottom - bounds.top
+        };
+        what = "all screens together";
+    } else {
+        // One window: find it the same way window_action does
+        const windows = await worker.request("list", {}, 5_000);
+        const { window: chosen, error, candidates } = resolveWindow(windows, windowName, handle);
+
+        // Not sure which window is meant: give the options back so Jason can choose or ask
+        if (!chosen) {
+            return { ok: false, error, candidates };
+        }
+
+        // A minimized window has nothing to capture, so bring it back first
+        if (chosen.state === "minimized") {
+            await worker.request("act", { handle: chosen.handle, action: "restore" });
+        }
+
+        // Bring it to the front so nothing else is covering it
+        const focus = await worker.request("act", { handle: chosen.handle, action: "focus" });
+
+        // Windows sometimes refuses; a screenshot of the wrong thing would be misleading
+        if (/would not/.test(focus.message)) {
+            return {
+                ok: false,
+                error: `${chosen.app} (${chosen.title}): ${focus.message}.`
+            };
+        }
+
+        // Give the window a moment to repaint after coming forward
+        await pause(400);
+
+        // Read its position again, because restoring can move or resize it
+        const fresh =
+            (await worker.request("list", {}, 5_000)).find(item => item.handle === chosen.handle) ||
+            chosen;
+
+        rect = clampToDesktop(
+            { left: fresh.left, top: fresh.top, width: fresh.width, height: fresh.height },
+            monitors
+        );
+        what = `the ${chosen.app} window titled "${chosen.title}"`;
+    }
+
+    // Nothing visible to capture (for example a window completely off-screen)
+    if (rect.width < 10 || rect.height < 10) {
+        return { ok: false, error: "There is nothing visible to capture there." };
+    }
+
+    // "high" keeps more detail for small text, at a slightly higher cost
+    const maxEdge = detail === "high" ? 1920 : 1280;
+
+    // The PowerShell helper does the actual capture and shrinking
+    const picture = await worker.request("capture", { ...rect, maxEdge }, 20_000);
+
+    return {
+        ok: true,
+        what,
+        mimeType: picture.mimeType,
+        data: picture.data,
+        width: picture.width,
+        height: picture.height
+    };
+}
+
+// ---------- Keyboard: typing and key presses ----------
+// a launch, keyboard_input waits much longer for the new window to appear.
+let lastLaunchAt = 0;
+const MAX_TYPED_CHARACTERS = 2_000;   // longer texts must be split up
+const MAX_KEY_REPEATS = 20;           // "press down 50 times" is capped
+
+// Programs where typed text would be run as commands. Typing into these is blocked, so Jason can
+// never be tricked into running something this way. To allow it, set JASON_ALLOW_TERMINAL_TYPING=1 in .env
+const TERMINAL_APPS = new Set([
+    "cmd", "powershell", "pwsh", "powershell_ise",
+    "windowsterminal", "wt", "conhost", "openconsole", "wsl", "bash"
+]);
+
+// Key combinations Jason may not press. Returns the reason, or null if the combination is fine.
+function blockedReason(combo) {
+    const parts = combo.toLowerCase().split("+").map(part => part.trim());
+
+    // Win+R opens the Run box and Win+X opens a system menu: with typing, that could run anything
+    if (parts.includes("win") || parts.includes("windows")) {
+        return "Windows-key shortcuts are blocked, because they can open Run and other system tools. " +
+            "Use launch_app or window_action instead.";
+    }
+
+    // Closing a window should go through window_action, which asks first
+    if (parts.includes("alt") && parts.includes("f4")) {
+        return "Alt+F4 is blocked. Use window_action with close instead, and ask the user first.";
+    }
+
+    // The secure attention shortcut
+    if (parts.includes("ctrl") && parts.includes("alt") && (parts.includes("delete") || parts.includes("del"))) {
+        return "Ctrl+Alt+Delete is blocked.";
+    }
+
+    return null;
+}
+
+// keyboard_input: type text, or press keys, in a window you name
+export async function keyboardInput({ action, text, keys, times, pressEnter, target, handle } = {}) {
+    if (action !== "type" && action !== "press") {
+        throw new Error('action must be "type" or "press".');
+    }
+
+    // ----- Check the request before touching any window -----
+    if (action === "type") {
+        if (typeof text !== "string" || text.length === 0) {
+            throw new Error("text is required when action is type.");
+        }
+
+        if (text.length > MAX_TYPED_CHARACTERS) {
+            throw new Error(`That text is too long to type at once (the limit is ${MAX_TYPED_CHARACTERS} characters). Split it up.`);
+        }
+    } else {
+        if (typeof keys !== "string" || !keys.trim()) {
+            throw new Error('keys is required when action is press, for example "ctrl+s".');
+        }
+
+        const reason = blockedReason(keys);
+
+        if (reason) {
+            return { ok: false, error: reason };
+        }
+    }
+
+    // How many times to press (1 to 20)
+    const repeat = Math.min(Math.max(Math.round(Number(times) || 1), 1), MAX_KEY_REPEATS);
+
+    // A window must always be named, so keystrokes never land in Jason's own window by accident
+    const wantsActiveWindow = typeof target === "string" && target.trim().toLowerCase() === "active";
+
+    if (!wantsActiveWindow && !target && (handle === undefined || handle === null)) {
+        return {
+            ok: false,
+            error:
+                'Say which window to use: give target as an app name or part of the title, ' +
+                'or "active" for the window that is focused right now.'
+        };
+    }
+
+        // ----- Get the right window in front, and prove it is there -----
+    let active;                                                   // the window that really has focus
+    let lastProblem = "The window did not come to the front";    // used in the error if every attempt fails
+
+    if (wantsActiveWindow) {
+        // Use whatever has focus right now
+        const windows = await worker.request("list", {}, 5_000);
+        active = windows.find(item => item.active);
+
+        if (!active) {
+            return { ok: false, error: "No window has focus right now." };
+        }
+    } else {
+        // What the user asked for, used to double-check which window really has focus afterwards
+        const wanted = String(target || "").trim().toLowerCase();
+
+        // Up to 3 attempts. A program that was only just launched may show a temporary window that is
+        // replaced by the real one a moment later, so every attempt starts from the current window list.
+        for (let attempt = 1; attempt <= 3 && !active; attempt++) {
+            let windows = await worker.request("list", {}, 5_000);
+            let resolved = resolveWindow(windows, target, handle);
+
+            // "No open window matched" means it is not open (yet). Right after launching an app, Windows
+            // can take a long time to show its window (a store app starting cold can take 10 seconds or
+            // more), so wait up to 15 seconds then. If nothing was launched recently, only check once
+            // more after a second. Other failures, such as two windows matching, are not worth waiting for.
+            const notOpenYet = outcome => !outcome.window && /No open window matched/.test(outcome.error || "");
+            const waitRounds = Date.now() - lastLaunchAt < 30_000 ? 30 : 2;   // each round is half a second
+
+            for (let wait = 0; wait < waitRounds && notOpenYet(resolved); wait++) {
+                await pause(500);
+                windows = await worker.request("list", {}, 5_000);
+                resolved = resolveWindow(windows, target, handle);
+            }
+
+            // Still not found, or several windows match: give that back so Jason can choose or ask
+            if (!resolved.window) {
+                // List the programs that ARE open, which makes a failure easy to understand
+                const openPrograms = [...new Set(windows.map(item => item.app))].join(", ");
+
+                return {
+                    ok: false,
+                    error: `${resolved.error} Programs with open windows right now: ${openPrograms}.`,
+                    candidates: resolved.candidates
+                };
+            }
+
+            // Still not found, or several windows match: give that back so Jason can choose or ask
+            if (!resolved.window) {
+                return { ok: false, error: resolved.error, candidates: resolved.candidates };
+            }
+
+            const chosen = resolved.window;
+
+            // A minimized window cannot receive typing, so bring it back first
+            if (chosen.state === "minimized") {
+                await worker.request("act", { handle: chosen.handle, action: "restore" });
+            }
+
+            // Bring it to the front
+            const focus = await worker.request("act", { handle: chosen.handle, action: "focus" });
+
+            if (/would not/.test(focus.message)) {
+                lastProblem = `${chosen.app} (${chosen.title}): ${focus.message}`;
+                await pause(500);
+                continue;   // try again from a fresh window list
+            }
+
+            // Give Windows time to finish switching (longer on later attempts)
+            await pause(attempt === 1 ? 350 : 700);
+
+            // Check who really has focus now. Accept the same window, or any window whose app or
+            // title matches the name that was asked for (the real window may have a new handle).
+            const after = await worker.request("list", {}, 5_000);
+            const now = after.find(item => item.active);
+
+            if (
+                now &&
+                (now.handle === chosen.handle ||
+                    (wanted && `${now.app} ${now.title}`.toLowerCase().includes(wanted)))
+            ) {
+                active = now;
+            } else {
+                lastProblem = `${chosen.app} did not come to the front`;
+            }
+        }
+
+        // All attempts failed: say so, and do not type anywhere
+        if (!active) {
+            return { ok: false, error: `${lastProblem}. Nothing was sent.` };
+        }
+
+        // A short extra pause so the program's text area is ready to receive keys
+        await pause(150);
+    }
+
+    // ----- Never type into a terminal (it would run what is typed) -----
+    if (
+        TERMINAL_APPS.has(String(active.app).toLowerCase()) &&
+        process.env.JASON_ALLOW_TERMINAL_TYPING !== "1"
+    ) {
+        return {
+            ok: false,
+            error:
+                `${active.app} is a terminal, and typing there could run commands, so it is blocked. ` +
+                "Ask the user to do it themselves, or to set JASON_ALLOW_TERMINAL_TYPING=1 in .env."
+        };
+    }
+
+    // ----- Send the keystrokes -----
+    const request =
+        action === "type"
+            // The text travels as base64 so special characters arrive intact
+            ? { mode: "type", textBase64: Buffer.from(text, "utf8").toString("base64") }
+            : { mode: "press", keys: keys.trim(), times: repeat };
+
+    const result = await worker.request("keys", request, 20_000);
+
+    // "type this and press Enter" in one go (for search boxes and chat fields)
+    if (action === "type" && pressEnter === true) {
+        await worker.request("keys", { mode: "press", keys: "enter", times: 1 }, 10_000);
+    }
+
+    return {
+        ok: true,
+        execution: {
+            type: "keyboard_input",
+            platform: "windows",
+            action,
+            app: active.app
+        },
+        // Honest wording: the keys were sent, but nothing checks what the program did with them
+        message:
+            `${result.message}${pressEnter === true && action === "type" ? " and pressed Enter" : ""} ` +
+            `in ${active.app} (${active.title}). The keystrokes were sent; the result was not verified.`
+    };
 }
 
 // ---------- 5. Background awareness: what is on screen right now, kept fresh and free to read ----------

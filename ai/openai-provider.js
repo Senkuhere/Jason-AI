@@ -153,7 +153,9 @@ export class OpenAIProvider {
             return {
                 id: toolCall.id,
                 name: toolCall.function.name,
-                args
+                args,
+                // Lets the fallback logic see that OpenAI has already worked on this request
+                provider: "openai"
             };
         });
 

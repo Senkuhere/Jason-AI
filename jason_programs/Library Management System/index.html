@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Library Management System</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Library Management System</h1>
+      <p class="subtitle">Simple CRUD with JSON (localStorage)</p>
+    </header>
+
+    <main>
+      <section class="form-section">
+        <h2 id="form-title">Add New Book</h2>
+        <form id="book-form">
+          <div class="row">
+            <label>Title</label>
+            <input type="text" id="title" required>
+          </div>
+          <div class="row">
+            <label>Author</label>
+            <input type="text" id="author" required>
+          </div>
+          <div class="row">
+            <label>ISBN</label>
+            <input type="text" id="isbn" required>
+          </div>
+          <div class="row">
+            <label>Year</label>
+            <input type="number" id="year" min="0" step="1">
+          </div>
+          <div class="row">
+            <label>Copies</label>
+            <input type="number" id="copies" min="1" value="1">
+          </div>
+
+          <div class="actions">
+            <button type="submit" id="save-btn">Save</button>
+            <button type="button" id="cancel-btn" class="secondary hidden">Cancel</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="list-section">
+        <div class="list-header">
+          <h2>Books</h2>
+          <div class="search-bar">
+            <input type="search" id="search" placeholder="Search by title, author, ISBN">
+            <button id="clear-search">Clear</button>
+          </div>
+        </div>
+
+        <table id="books-table">
+          <thead>
+            <tr>
+              <th>Title</th>
+              <th>Author</th>
+              <th>ISBN</th>
+              <th>Year</th>
+              <th>Copies</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- rows go here -->
+          </tbody>
+        </table>
+
+        <div class="table-footer">
+          <span id="total-count">Total: 0</span>
+          <button id="export-btn">Export JSON</button>
+          <input type="file" id="import-file" accept="application/json" style="display:none">
+          <button id="import-btn">Import JSON</button>
+          <button id="clear-storage" class="danger">Clear All</button>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <small>Built with vanilla HTML, CSS, and JavaScript. Data stored in localStorage as JSON.</small>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

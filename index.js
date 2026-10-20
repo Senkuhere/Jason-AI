@@ -6,6 +6,8 @@ import {
     sendMessage
 } from "./jason-core.js";
 
+import { getLongTermMemories } from "./long-term-memory.js";
+
 import { startScreenAwareness } from "./utility_tools/computer-control.js";
 
 const rl = readline.createInterface({
@@ -44,10 +46,21 @@ function chat() {
                     }
 
                     if (event.type === "tool_started") {
+                        // Also show the arguments, so you can see exactly what Jason is about to do
                         console.log(
-                            `Jason requested tool: ${event.name}`
+                            `Jason requested tool: ${event.name}`,
+                            JSON.stringify(event.args)
                         );
                     }
+
+                    // Some tools do not crash when they cannot do the job: they return ok: false with a reason.
+                    // Show that reason here, so "keyboard_input error" is never a mystery again.
+                    if (event.type === "tool_finished" && event.result?.ok === false) {
+                        console.log(
+                            `[Jason] ${event.name} did not succeed: ${event.result.error}`
+                        );
+                    }
+
                     if (event.type?.endsWith("_failed")) {
                         const details =
                             typeof event.error === "object"
@@ -80,7 +93,9 @@ async function start() {
     try {
         
         const status = await initializeJason();
-
+        // Load the memories into RAM now, while Jason is starting, so the first message is not slowed down
+        void getLongTermMemories("").catch(() => {});
+        
         if (status.longTermMemoryAvailable) {
             console.log("Database connected.");
         } else {
