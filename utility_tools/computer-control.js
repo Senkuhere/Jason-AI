@@ -466,7 +466,7 @@ export async function launchApp(name) {
 // It is compiled ONCE into a DLL in your temp folder; later starts just load the DLL.
 // If you ever change the C# code, change the version in DLL_NAME (v2 -> v3)
 // so the old compiled copy is not reused.
-const DLL_NAME = "JasonWin-v5.dll";
+const DLL_NAME = "JasonWin-v6.dll";
 
 const CSHARP_SOURCE = `
 using System;
@@ -608,6 +608,16 @@ public static class JasonWin
     // Sends keystrokes to whichever window currently has focus
     [DllImport("user32.dll", SetLastError = true)] private static extern uint SendInput(uint count, INPUT[] inputs, int size);
 
+    // ---- How long since the last keyboard or mouse input anywhere in Windows ----
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LASTINPUTINFO
+    {
+        public uint cbSize;    // the size of this record (Windows needs to be told)
+        public uint dwTime;    // when the last input happened, in milliseconds since Windows started
+    }
+
+    [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+
     // The rectangle the user actually SEES (Windows adds invisible borders to the "official" one)
     private static RECT GetVisibleRect(IntPtr hWnd)
     {
@@ -746,7 +756,21 @@ public static class JasonWin
         }
     }
 
-        // Builds one keyboard event (one key going down, or one key coming up)
+    // Seconds since the keyboard or mouse was last used anywhere in Windows
+    public static int IdleSeconds()
+    {
+        LASTINPUTINFO info = new LASTINPUTINFO();
+        info.cbSize = (uint)Marshal.SizeOf(typeof(LASTINPUTINFO));
+
+        if (!GetLastInputInfo(ref info)) return 0;
+
+        // Both numbers count milliseconds since Windows started. The subtraction is allowed to wrap around.
+        uint idleMilliseconds = unchecked((uint)Environment.TickCount - info.dwTime);
+
+        return (int)(idleMilliseconds / 1000);
+    }
+
+    // Builds one keyboard event (one key going down, or one key coming up)
     private static INPUT MakeKey(ushort vk, ushort scan, uint flags)
     {
         INPUT input = new INPUT();
@@ -1203,6 +1227,11 @@ function Invoke-JasonKeys($request) {
     return [pscustomobject]@{ message = $message }
 }
 
+# How many seconds since the keyboard or mouse was last used anywhere in Windows
+function Invoke-JasonIdle($request) {
+    return [pscustomobject]@{ seconds = [JasonWin]::IdleSeconds() }
+}
+
 # Tell Node we are ready, then answer requests until Node closes the connection
 [Console]::Out.WriteLine('{"ready":true}')
 
@@ -1227,6 +1256,7 @@ while ($true) {
             'media'    { $data = Invoke-JasonMedia $request }
             'capture'  { $data = Invoke-JasonCapture $request }
             'keys'     { $data = Invoke-JasonKeys $request }
+            'idle'     { $data = Invoke-JasonIdle $request }
             default    { throw "Unknown command: $($request.cmd)" }
         }
 
@@ -2047,6 +2077,13 @@ export async function keyboardInput({ action, text, keys, times, pressEnter, tar
             `${result.message}${pressEnter === true && action === "type" ? " and pressed Enter" : ""} ` +
             `in ${active.app} (${active.title}). The keystrokes were sent; the result was not verified.`
     };
+}
+
+// Seconds since the keyboard or mouse was last used anywhere in Windows (tells Jason if you are at the laptop)
+export async function getSystemIdleSeconds() {
+    const result = await worker.request("idle", {}, 5_000);
+
+    return Number(result.seconds) || 0;
 }
 
 // ---------- 5. Background awareness: what is on screen right now, kept fresh and free to read ----------

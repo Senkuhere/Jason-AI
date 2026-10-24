@@ -70,6 +70,16 @@
                         ×
                     </button>
                 </div>
+                <!-- Voice recorder: shows while recording, and while a recording waits to be sent -->
+                <div id="voiceBar" class="voice-bar" hidden>
+                    <span id="voiceDot" class="voice-dot"></span>
+                    <span id="voiceStatus" class="voice-status"></span>
+                    <span id="voiceTimer" class="voice-timer"></span>
+                    <button id="voiceStopBtn" class="voice-btn" type="button" aria-label="Stop recording" title="Stop recording" hidden>■</button>
+                    <button id="voicePlayBtn" class="voice-btn" type="button" aria-label="Play recording" title="Play recording" hidden>▶</button>
+                    <button id="voiceDeleteBtn" class="voice-btn" type="button" aria-label="Delete recording" title="Delete recording" hidden>🗑</button>
+                    <button id="voiceSendBtn" class="voice-btn primary" type="button" aria-label="Send recording" title="Send recording" hidden>➤</button>
+                </div>
                 <div class="chat-input-wrapper">
                     <input type="file" id="imageInput" accept="image/png,image/jpeg,image/webp" hidden>
                     <button class="attach-btn" id="imageButton" type="button" aria-label="Attach image" title="Attach image">
@@ -79,10 +89,23 @@
                         </svg>
                     </button>
                     <textarea id="chatInput" placeholder="Command Jason..." rows="1"></textarea>
+                    <button class="mic-btn" id="micBtn" type="button" aria-label="Record a voice message" title="Record a voice message">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                    </button>
                     <button class="send-btn" id="sendBtn" aria-label="Send message">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
                     </button>
                 </div>
+                <div class="voice-footer">
+                    <button id="speakToggleBtn" class="speak-toggle" type="button" aria-pressed="false" title="Choose when Jason speaks on this device"></button>
+                    <button id="handsFreeBtn" class="speak-toggle" type="button" aria-pressed="false" title="Listen for 'Jason' hands-free (laptop only)">🎧 Hands-free: off</button>
+                </div>
+                <div id="handsFreeStatus" class="handsfree-status" hidden></div>
                 <div class="input-footer-note">Cinematic holographic prototype, Sir.</div>
             </div>
         </aside>
@@ -146,6 +169,9 @@
     
 
     <script src="script.js"></script>
+    <script src="voice.js"></script>
+    <script src="hands-free.js"></script>
+    <script src="events.js"></script>
 
     <!-- Mobile Draggable Swipe Script with Smooth Physics -->
     <script>

@@ -131,7 +131,7 @@ export async function getProviderForRequest(userMessage) {
 
         return {
             name: "openai",
-            provider: geminiWithBackup,
+            provider: providers.openai,
             decision: {
                 provider: "openai",
                 complexity: "complex",
@@ -167,7 +167,7 @@ export async function getProviderForRequest(userMessage) {
     ) {
         return {
             name: "openai",
-            provider: providers.openai,
+            provider: geminiWithBackup,
             decision
         };
     }

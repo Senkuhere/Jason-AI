@@ -286,6 +286,36 @@ export function openWebPage(url) {
     };
 }
 
+// True if (nearly) every meaningful word of the search appears in the page title.
+// Used to tell whether the page that was opened is probably the one the user meant.
+function titleMatchesQuery(query, title) {
+    // Lower case words only: punctuation removed (letters and digits of any language are kept)
+    const words = text =>
+        String(text || "")
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}\s]/gu, " ")
+            .split(/\s+/)
+            .filter(Boolean);
+
+    // Words that say what to do, not what to find
+    const filler = new Set([
+        "play", "open", "search", "find", "song", "songs", "music", "video", "lyrics", "lyric",
+        "official", "by", "the", "a", "an", "of", "on", "in", "for", "me", "please",
+        "youtube", "and", "feat", "ft"
+    ]);
+
+    const wanted = words(query).filter(word => word.length > 1 && !filler.has(word));
+
+    // Nothing specific to check, so assume it is fine
+    if (wanted.length === 0) return true;
+
+    const titleText = words(title).join(" ");
+    const found = wanted.filter(word => titleText.includes(word)).length;
+
+    // At least three quarters of the meaningful words must appear in the title
+    return found / wanted.length >= 0.75;
+}
+
 export async function searchAndOpen(query, site) {
     if (typeof query !== "string" || query.trim().length < 2) {
         throw new Error("A search query is required.");
@@ -316,5 +346,12 @@ export async function searchAndOpen(query, site) {
     if (!top) throw new Error(`No result found for "${query}".`);
 
     openWebPage(top.url);
-    return { ok: true, url: top.url, title: top.title };
+
+    return {
+        ok: true,
+        url: top.url,
+        title: top.title,
+        // false means the opened page may not be what the user asked for
+        matchesQuery: titleMatchesQuery(query, top.title)
+    };
 }

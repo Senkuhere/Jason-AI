@@ -5,7 +5,7 @@ import { captureScreen } from "./computer-control.js";
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 // Which model looks at the screenshot. Set GEMINI_VISION_MODEL in .env to change it.
-const VISION_MODEL = process.env.GEMINI_VISION_MODEL || "gemini-3.1-flash-lite";
+const VISION_MODEL = process.env.GEMINI_VISION_MODEL || "gemini-3.5-flash-lite";
 
 // Give up on a vision request after this long
 const VISION_TIMEOUT_MS = 25_000;

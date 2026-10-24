@@ -63,6 +63,16 @@ import { lookAtScreen
 
 import { readDocument } from "./file_tools/document-reader.js";
 
+import { setInitiativeSettings } from "./initiative.js";
+
+import { addNote, 
+         listNotes, 
+         completeNote, 
+         deleteNote, 
+         resolveDueTime, 
+         formatManila 
+} from "./notes.js";
+
 function capability({
     name,
     description,
@@ -417,9 +427,13 @@ const capabilities = new Map([
         execute: ({ query, site }) => searchAndOpen(query, site),
         mutating: true,
         // Also say which page was really opened, since the top search result is not always what the user meant
+                    // The page title is only mentioned when it does not look like what was asked for
         instantReply: (args, result) => {
-                const intro = (typeof args.say === "string" && args.say.trim()) || "Opening it, Sir.";
-                return result?.title ? `I opened: "${result.title}".` : intro;
+            const intro = (typeof args.say === "string" && args.say.trim()) || "Opening it, Sir.";
+
+            return result?.title && result.matchesQuery === false
+                ? `${intro} I opened "${result.title}", which may not be what you meant, Sir.`
+                : intro;
             }
     })
     ],
@@ -1196,7 +1210,7 @@ const capabilities = new Map([
             instantReply: (args, result) => result?.answer || null
         })
     ],
-        [
+        /*[
         "keyboard_input",
         capability({
             name: "keyboard_input",
@@ -1261,7 +1275,149 @@ const capabilities = new Map([
             instantReply: (args) =>
                 (typeof args.say === "string" && args.say.trim()) || "Done, Sir."
         })
+    ],*/
+        [
+        "initiative_settings",
+        capability({
+            name: "initiative_settings",
+            description:
+                "Control how and when Jason speaks up on his own. mode: off, rare (now and then), normal " +
+                "(once in a while), or chatty (fairly often). quietMinutes: stay quiet for that many minutes " +
+                "(for example 60 for 'be quiet for an hour'; 0 ends quiet time). checkEveryMinutes: how often " +
+                "he thinks about speaking up, in minutes (0 returns to the mode's usual rhythm). thinkNow: true " +
+                "makes him think right now about something he would like to bring up on his own, using what he " +
+                "knows about the user and the computer, and say it: a spontaneous remark, idea or reminder " +
+                "rather than an answer to a question. Use thinkNow when the user invites him to speak up or " +
+                "bring something up himself. With no arguments, it reports the current settings. Use it when " +
+                "the user asks you to talk more or less, to be quiet, to stop interrupting, or asks about " +
+                "these settings.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    mode: {
+                        type: "STRING",
+                        enum: ["off", "rare", "normal", "chatty"],
+                        description: "How often to speak up on your own"
+                    },
+                    quietMinutes: {
+                        type: "NUMBER",
+                        description: "Stay quiet for this many minutes. 0 ends quiet time."
+                    },
+                    thinkNow: {
+                        type: "BOOLEAN",
+                        description: "Think right now about something you would like to bring up on your own, and say it"
+                    },
+                    checkEveryMinutes: {
+                        type: "NUMBER",
+                        description: "How often to think about speaking up, in minutes. 0 returns to the usual rhythm."
+                    },
+                }
+            },
+            execute: ({ mode, quietMinutes, thinkNow, checkEveryMinutes }) =>
+                setInitiativeSettings({ mode, quietMinutes, thinkNow, checkEveryMinutes }),
+            mutating: true,
+            // The result already carries the answer, written for the user
+            instantReply: (args, result) => result?.message || null
+        })
     ],
+        [
+        "notes",
+        capability({
+            name: "notes",
+            description:
+                "Your notebook, for reminders and notes. action 'add' saves a note. Give remindInMinutes " +
+                "(for example 60 for 'in an hour') or remindAt (Manila time, written YYYY-MM-DDTHH:mm) to make " +
+                "it a reminder that you will tell the user when it is due. Use urgency 'high' for something " +
+                "important that should be repeated until dealt with. action 'list' shows what is in the " +
+                "notebook, 'done' marks a note as finished, and 'delete' removes one. For done and delete, " +
+                "give the note's id, or some of its words in text. Use it whenever the user asks you to " +
+                "remind them of something, to note something down, or asks what you have noted.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    action: {
+                        type: "STRING",
+                        enum: ["add", "list", "done", "delete"],
+                        description: "What to do with the notebook"
+                    },
+                    text: {
+                        type: "STRING",
+                        description: "The note itself (add), or some words of the note to find (done, delete)"
+                    },
+                    id: { type: "STRING", description: "The note's id, if known (done, delete)" },
+                    remindInMinutes: {
+                        type: "NUMBER",
+                        description: "Remind the user in this many minutes (for example 60 for an hour)"
+                    },
+                    remindAt: {
+                        type: "STRING",
+                        description: "Remind the user at this Manila time, written YYYY-MM-DDTHH:mm"
+                    },
+                    urgency: {
+                        type: "STRING",
+                        enum: ["low", "normal", "high"],
+                        description: "How important the note is"
+                    },
+                    say: {
+                        type: "STRING",
+                        description:
+                            "One short, natural sentence confirming what you did, in your own words and voice."
+                    }
+                },
+                required: ["action"]
+            },
+            execute: async ({ action, text, id, remindInMinutes, remindAt, urgency }) => {
+                const execution = { type: "notes", platform: "windows" };
+
+                if (action === "list") {
+                    return { ok: true, execution, notes: await listNotes() };
+                }
+
+                if (action === "add") {
+                    const dueAt = resolveDueTime({ remindInMinutes, remindAt });
+                    const { note, duplicate } = await addNote({ text, urgency, dueAt, source: "user" });
+
+                    return {
+                        ok: true,
+                        execution,
+                        id: note.id,
+                        text: note.text,
+                        due: note.dueAt ? formatManila(note.dueAt) : null,
+                        alreadyNoted: duplicate
+                    };
+                }
+
+                if (action === "done" || action === "delete") {
+                    const note = action === "done"
+                        ? await completeNote(id || text)
+                        : await deleteNote(id || text);
+
+                    if (!note) {
+                        return { ok: false, execution, error: "No note in the notebook matches that." };
+                    }
+
+                    return { ok: true, execution, text: note.text };
+                }
+
+                return { ok: false, execution, error: "action must be add, list, done or delete." };
+            },
+            mutating: true,
+            // The confirmation is written by the model (the say argument); a plain one is the fallback
+            instantReply: (args, result) => {
+                if (args.action === "list") return null;   // the model reads the list out in its own words
+
+                const say = typeof args.say === "string" ? args.say.trim() : "";
+                if (say) return say;
+
+                if (args.action === "add") {
+                    return result?.due ? `I will remind you at ${result.due}, Sir.` : "Noted, Sir.";
+                }
+
+                return args.action === "done" ? "Marked as done, Sir." : "Removed it, Sir.";
+            }
+        })
+    ],
+
     
 ]);
 

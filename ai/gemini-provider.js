@@ -112,7 +112,9 @@ export function isTransient(error) {
 }
 
 // Starts another identical request if the first is slow, and uses whichever finishes first
-function hedgedRequest(makeRequest) {
+// isProgressing(): returns true once an answer has started to arrive, so a slow-but-working stream
+// is not duplicated
+function hedgedRequest(makeRequest, isProgressing = () => false) {
     return new Promise((resolve, reject) => {
         let settled = false;
         let started = 0;
@@ -155,7 +157,10 @@ function hedgedRequest(makeRequest) {
             makeRequest().then(onSuccess, onFailure);
 
             if (started < MAX_ATTEMPTS) {
-                timer = setTimeout(startAttempt, HEDGE_AFTER_MS);
+                // Only start a duplicate request if nothing has come back yet
+                timer = setTimeout(() => {
+                    if (!isProgressing()) startAttempt();
+                }, HEDGE_AFTER_MS);
             }
         };
 
@@ -166,21 +171,23 @@ function hedgedRequest(makeRequest) {
 export class GeminiProvider {
     constructor({
         apiKey = process.env.GEMINI_API_KEY,
-        model = "gemini-3.5-flash-lite"
+        model = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite"
     } = {}) {
         this.client = new GoogleGenAI({ apiKey });
         this.model = model;
     }
 
-    async generate({
-        history,
-        systemInstruction,
-        tools
-    }) {
-        const contents = historyToGemini(history);
+    // Streaming version: asks for the answer in small pieces and hands each piece of TEXT to onText
+    // the moment it arrives. Returns all the parts of the answer, like a normal request would.
+    async streamParts({ contents, systemInstruction, tools, onText }) {
+        let owner = null;          // which attempt is allowed to pass text on (a duplicate must not repeat it)
+        let progressed = false;    // true as soon as any piece has arrived
+        let attemptCounter = 0;
 
-        const response = await hedgedRequest(() =>
-            this.client.models.generateContent({
+        return hedgedRequest(async () => {
+            const attempt = ++attemptCounter;
+
+            const stream = await this.client.models.generateContentStream({
                 model: this.model,
                 contents,
                 config: {
@@ -188,10 +195,62 @@ export class GeminiProvider {
                     tools,
                     thinkingConfig: { thinkingLevel: process.env.GEMINI_THINKING || "MINIMAL" }
                 }
-            })
-        );
+            });
 
-        const modelContent = response.candidates?.[0]?.content;
+            const collected = [];
+
+            for await (const chunk of stream) {
+                progressed = true;
+
+                for (const part of chunk.candidates?.[0]?.content?.parts || []) {
+                    collected.push(part);
+
+                    // Spoken text only (Gemini's private "thought" parts are never shown)
+                    if (part.text && !part.thought) {
+                        if (owner === null) owner = attempt;   // the first attempt to produce text wins
+                        if (owner === attempt) onText(part.text);
+                    }
+                }
+            }
+
+            return collected;
+        }, () => progressed);
+    }
+
+    async generate({
+        history,
+        systemInstruction,
+        tools,
+        onText
+    }) {
+        const contents = historyToGemini(history);
+
+        // Streaming is used only when the caller wants the text as it arrives.
+        // JASON_STREAMING=off in .env switches it off completely.
+        const streaming =
+            typeof onText === "function" && process.env.JASON_STREAMING !== "off";
+
+        let parts;
+
+        if (streaming) {
+            parts = await this.streamParts({ contents, systemInstruction, tools, onText });
+        } else {
+            const response = await hedgedRequest(() =>
+                this.client.models.generateContent({
+                    model: this.model,
+                    contents,
+                    config: {
+                        systemInstruction,
+                        tools,
+                        thinkingConfig: { thinkingLevel: process.env.GEMINI_THINKING || "MINIMAL" }
+                    }
+                })
+            );
+
+            parts = response.candidates?.[0]?.content?.parts || [];
+        }
+
+        const modelContent = { parts };
 
         const toolCalls = (modelContent?.parts || [])
             .filter(part => part.functionCall)

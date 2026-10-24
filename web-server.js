@@ -3,6 +3,7 @@ import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { transcribeAudio } from "./speech.js";
 
 import { getLongTermMemories } from "./long-term-memory.js";
 
@@ -21,6 +22,22 @@ import {
     readStoredImage,
     deleteStoredImage
 } from "./storage/image-storage.js";
+
+import { openChannel, 
+         sendToClient, 
+         updatePresence 
+} from "./push-channel.js";
+
+import { startInitiative, 
+         noteRequestStarted, 
+         noteRequestFinished } 
+from "./initiative.js";
+
+// Tells you when a reminder from Jason's notebook comes due
+import { startReminders } from "./reminders.js";
+
+// Keeps the story of the user's day (what is open on the computer, and when)
+import { startDayLog } from "./daylog.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -200,6 +217,24 @@ async function storeUploadedFile({ name, buffer }, index = 0) {
     return savedPath;
 }
 
+// Messages are handled one at a time, in order. Two messages at once would mix up Jason's memory.
+let chatQueue = Promise.resolve();
+
+function runOneAtATime(task) {
+    const run = chatQueue.then(task, task);
+    chatQueue = run.catch(() => {});     // a failed message never blocks the next one
+    return run;
+}
+
+// A safety net: a stray error in some background task is logged instead of stopping Jason
+process.on("unhandledRejection", reason => {
+    console.error("[Jason] Unhandled promise rejection (Jason keeps running):", reason);
+});
+
+process.on("uncaughtException", error => {
+    console.error("[Jason] Unexpected error (Jason keeps running):", error);
+});
+
 const server = http.createServer(async (request, response) => {
     try {
         if (
@@ -208,6 +243,10 @@ const server = http.createServer(async (request, response) => {
         ) {
             const rawBody = await readRequestBody(request);
             const body = JSON.parse(rawBody);
+
+            // Which page sent this message (so early sentences go back to that page only)
+            const clientId =
+                typeof body.clientId === "string" ? body.clientId.slice(0, 64) : null;
 
             const rawImages = Array.isArray(body.images)
                 ? body.images
@@ -295,13 +334,42 @@ const server = http.createServer(async (request, response) => {
 
             let result;
 
+            // Tells the initiative system that you are talking to Jason right now (so he never interrupts)
+            noteRequestStarted(clientId);
+
             try {
-                result = await sendMessage(
+                result = await runOneAtATime(() => sendMessage(
                     messageForJason,
                     {
                         images: imagesForJason,
                         onEvent(event) {
+                            // Streamed answer text goes straight to the page that asked, and stays out of the events list
+                            if (event.type === "reply_delta" || event.type === "reply_abort") {
+                                if (clientId) {
+                                    sendToClient(
+                                        clientId,
+                                        event.type === "reply_delta"
+                                            ? { type: "reply_delta", text: event.text }
+                                            : { type: "reply_abort" }
+                                    );
+                                }
+                                return;
+                            }
                             events.push(event);
+
+                            // The moment a tool starts, send its short sentence to the page that asked,
+                            // so it can be spoken now instead of after the whole request finishes
+                            if (
+                                event.type === "tool_started" &&
+                                clientId &&
+                                typeof event.args?.say === "string" &&
+                                event.args.say.trim()
+                            ) {
+                                sendToClient(clientId, {
+                                    type: "say",
+                                    text: event.args.say.trim()
+                                });
+                            }
 
                             if (event.type === "tool_started") {
                                 console.log(
@@ -325,13 +393,16 @@ const server = http.createServer(async (request, response) => {
                             }
                         }
                     }
-                );
+                ));
             } catch (error) {
                 for (const reference of storedReferences) {
                     await deleteStoredImage(reference.id);
                 }
 
                 throw error;
+            } finally {
+                // Always runs, even after an error, so Jason is never stuck thinking you are still busy
+                noteRequestFinished();
             }
 
             sendJson(response, 200, {
@@ -342,7 +413,51 @@ const server = http.createServer(async (request, response) => {
 
             return;
         }
+        
+                // Speech to text: the browser sends a recording, and we answer with what was said
+        if (
+            request.method === "POST" &&
+            request.url === "/api/transcribe"
+        ) {
+            const body = JSON.parse(await readRequestBody(request));
+            const text = await transcribeAudio(body.audio);
 
+            sendJson(response, 200, { text });
+            return;
+        }
+
+                // The live connection: the page connects once, and the server can push messages through it
+        if (
+            request.method === "GET" &&
+            request.url.startsWith("/api/events")
+        ) {
+            const url = new URL(request.url, "http://localhost");
+            const clientId = url.searchParams.get("clientId") || "";
+            const device = url.searchParams.get("device") === "phone" ? "phone" : "laptop";
+
+            // The id is made up by the page: letters, digits, dashes, underscores only
+            if (!/^[\w-]{8,64}$/.test(clientId)) {
+                sendJson(response, 400, { error: "A valid clientId is required." });
+                return;
+            }
+
+            openChannel(clientId, device, response);
+            return;   // the connection stays open
+        }
+
+        // A page reports whether it is visible, focused, and how long since you touched it
+        if (
+            request.method === "POST" &&
+            request.url === "/api/presence"
+        ) {
+            const report = JSON.parse(await readRequestBody(request));
+
+            updatePresence(String(report.clientId || ""), report);
+
+            sendJson(response, 200, { ok: true });
+            return;
+        }
+        
         if (
             request.method === "GET" &&
             request.url === "/api/history"
@@ -412,6 +527,10 @@ async function start() {
             console.log(
                 `Jason web interface: http://localhost:${PORT}`
             );
+            // Start the heartbeat that lets Jason speak up on his own
+            startInitiative();
+            startReminders();
+            startDayLog();
         });
     } catch (error) {
         console.error(

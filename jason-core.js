@@ -4,6 +4,11 @@ import { buildJasonSystemPrompt,
     }    from "./personality.js";
 import { getCurrentDate } from "./utility_tools/utility.js";
 
+// The day's story: what the user did earlier, and what is coming up (see daylog.js)
+import { buildAwarenessText, 
+         logUserMessage 
+} from "./daylog.js";
+
 import {
     getToolDefinitions,
     executeCapability,
@@ -230,7 +235,7 @@ ${userMessage}
 `;
 
     const response = await ai.models.generateContent({
-        model: "gemini-3.5-flash-lite",
+        model: process.env.GEMINI_MODEL || "gemini-3.5-flash-lite",
         contents: evaluationPrompt
     });
 
@@ -241,30 +246,6 @@ function getToolCallKey(name, args) {
     return `${name}:${JSON.stringify(args ?? {})}`;
 }
 
-async function requestApproval(name, args, onApproval) {
-    if (!requiresApproval(name)) {
-        return { approved: true, context: {} };
-    }
-
-    const prepared = await prepareCapability(name, args);
-
-    if (!onApproval) {
-        return {
-            approved: false,
-            reason: "No approval handler is available, so the action was not run."
-        };
-    }
-
-    const approved = await onApproval({
-        name,
-        args,
-        preview: prepared.preview
-    });
-
-    return approved
-        ? { approved: true, context: prepared.context }
-        : { approved: false, reason: "The user declined this action." };
-}
 
 async function runAgent(
     prompt,
@@ -311,16 +292,32 @@ async function runAgent(
         onEvent({ type: "llm_started", 
                   name: `step ${step + 1} (${Date.now() - llmStartedAt}ms)` 
             });
+         // Streaming: the text Jason writes is passed on, piece by piece, while it is still being written
+        let streamedText = "";   // everything streamed during THIS step
+        let stepOpen = true;     // false once the step is over, so late text from a slower duplicate request is ignored
+        let pieceCount = 0;      // how many pieces of text arrived (diagnostic)
         try {
             response = await provider.generate({
                 history,
                 systemInstruction,
-                tools: getToolDefinitions()
+                tools: getToolDefinitions(),
+                onText: delta => {
+                    if (!stepOpen) return;
+                    streamedText += delta;
+                    pieceCount++;
+                    if (pieceCount === 1) console.log(`[stream] first piece of text after ${Date.now() - llmStartedAt}ms`);
+                    onEvent({ type: "reply_delta", text: delta });
+                }
             });
+            stepOpen = false;
+            if (pieceCount > 0) console.log(`[stream] ${pieceCount} pieces in total, step finished after ${Date.now() - llmStartedAt}ms`);
             onEvent({ type: "llm_finished", 
                       name: `(${Date.now() - llmStartedAt}ms)` 
                     });
         } catch (error) {
+            stepOpen = false;
+            // Text was already shown but the step failed: tell the page to remove it
+            if (streamedText) onEvent({ type: "reply_abort" });
             const failure = describeError(error);
             
             onEvent({
@@ -335,6 +332,16 @@ async function runAgent(
         }
 
         const functionCalls = response.toolCalls || [];
+
+        
+        // The streamed text must match what this step really produced. If the step went on to use tools,
+        // or another provider answered instead, tell the page to throw away what it showed.
+        if (
+            streamedText &&
+            (functionCalls.length > 0 || streamedText.trim() !== String(response.text || "").trim())
+        ) {
+            onEvent({ type: "reply_abort" });
+        }
 
         if (functionCalls.length === 0) {
             let reply = response.text || "Task completed.";
@@ -607,7 +614,9 @@ export async function sendMessage(
             ? { images: imageReferences }
             : {}
     );
-    
+
+    // Added to the day's story, so later he knows what was said and when
+    logUserMessage(trimmedMessage || "(sent an image)");
     let longTermMemories = [];
 
     if (longTermMemoryAvailable) {
@@ -641,7 +650,8 @@ export async function sendMessage(
 
     const prompt = buildLiveContext({
         currentDate: getCurrentDate(),
-        screenContext: getScreenContext()
+        screenContext: getScreenContext(),
+        awarenessText: buildAwarenessText()
     }) + "\n\n" + buildChatPrompt(effectiveMessage, longTermMemories);
 
     const systemInstruction = buildJasonSystemPrompt();

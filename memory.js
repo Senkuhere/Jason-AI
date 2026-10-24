@@ -2,6 +2,7 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { annotateTimeFacts, timeAgoShort } from "./time-awareness.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -43,18 +44,30 @@ export async function loadShortTermMemory() {
     }
 }
 
-export async function saveShortTermMemory() {
-    try {
-        await fs.mkdir(MEMORY_DIRECTORY, { recursive: true });
+// Saves wait for each other, so two saves at once can never mix their data
+let saveChain = Promise.resolve();
 
-        await fs.writeFile(
-            MEMORY_FILE,
-            JSON.stringify(shortTermMemory, null, 2),
-            "utf8"
-        );
-    } catch (error) {
-        console.error("Could not save short-term memory:", error.message);
-    }
+export function saveShortTermMemory() {
+    saveChain = saveChain.then(async () => {
+        try {
+            await fs.mkdir(MEMORY_DIRECTORY, { recursive: true });
+            const text = JSON.stringify(shortTermMemory, null, 2);
+
+            // Written to a temporary file, then swapped in: a crash mid-save cannot damage the real file
+            const temporary = `${MEMORY_FILE}.tmp`;
+            await fs.writeFile(temporary, text, "utf8");
+
+            try {
+                await fs.rename(temporary, MEMORY_FILE);
+            } catch {
+                await fs.writeFile(MEMORY_FILE, text, "utf8");   // Windows sometimes refuses the swap briefly
+            }
+        } catch (error) {
+            console.error("Could not save short-term memory:", error.message);
+        }
+    });
+
+    return saveChain;
 }
 
 export function extractTopics(text) {
@@ -131,16 +144,17 @@ export function updateShortTermMemory(role, content, metadata={}) {
 }
 // SHORT-TERM MEMORY -----------------------------------------------------------------------------
 export function buildChatPrompt(latestUserMessage, longTermMemories = []) {
+    // Each fact gets a "time check" when it mentions a time or a day, so he cannot mix up past and future
     const longTermSection = longTermMemories.length
         ? longTermMemories
             .map(memory =>
                 [
                     `- Category: ${memory.category}`,
-                    `  Fact: ${memory.content}`,
-                    `  Given on: ${memory.created_at}`,
+                    `  Fact: ${annotateTimeFacts(memory.content)}`,
                     `  Last updated: ${memory.updated_at}`
                 ].join("\n")
             )
+            .join("\n")
         : "No long-term memories available.";
 
     return [
@@ -149,6 +163,7 @@ export function buildChatPrompt(latestUserMessage, longTermMemories = []) {
         "When the user asks about their personal facts, preferences, school, age, or background, use matching memories from this section.",
         "Do not say you do not know something if a matching memory is present.",
         "Do not mention the memory system or describe how these facts were retrieved.",
+        "Always compare any time or day in a fact with the current time before you mention it: if a [time check] says it already ended, it is in the past.",
         "",
         "Long-term memories:",
         longTermSection,
@@ -161,13 +176,11 @@ export function buildChatPrompt(latestUserMessage, longTermMemories = []) {
         }`,
         `Recent summary: ${shortTermMemory.summary || "No summary yet."}`,
         "",
-        "Recent conversation:",
+        "Recent conversation (with how long ago each message was):",
         ...shortTermMemory.messages
             .slice(-8)
-            .map(message => `${message.role}: ${message.content}`),
+            .map(message => `[${timeAgoShort(message.timestamp)}] ${message.role}: ${message.content}`),
         "",
         `Latest user message: ${latestUserMessage}`
     ].join("\n");
 }
-
-

@@ -10,9 +10,18 @@ const { Pool } = pg;
 
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: {
-        rejectUnauthorized: false
-    }
+    ssl: { rejectUnauthorized: false },
+    max: 5,                           // Jason never needs many connections at once
+    idleTimeoutMillis: 30_000,        // let go of connections nobody is using
+    connectionTimeoutMillis: 10_000,  // give up connecting after 10 seconds instead of waiting forever
+    query_timeout: 15_000,            // ...and on a query that takes longer than 15 seconds
+    keepAlive: true
+});
+
+// When the database drops an idle connection, the pool reports an "error". With no listener that
+// error would stop all of Jason. Now it is only logged, and the pool reconnects by itself.
+pool.on("error", error => {
+    console.error("[database] An idle connection was lost (it will reconnect by itself):", error.message);
 });
 
 export async function checkDatabaseConnection() {

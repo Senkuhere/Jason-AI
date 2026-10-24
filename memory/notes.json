@@ -1,0 +1,56 @@
+{
+  "notes": [
+    {
+      "id": "nmvloz0yd616",
+      "text": "Eat.",
+      "kind": "reminder",
+      "urgency": "normal",
+      "source": "user",
+      "createdAt": 1792803597205,
+      "dueAt": 1792803717204,
+      "status": "done",
+      "tellCount": 1,
+      "toldAt": 1792803747079,
+      "doneAt": 1792803747079
+    },
+    {
+      "id": "nmvlp3r1b1f1",
+      "text": "Stop thinking",
+      "kind": "reminder",
+      "urgency": "normal",
+      "source": "user",
+      "createdAt": 1792803817631,
+      "dueAt": 1792803877631,
+      "status": "done",
+      "tellCount": 1,
+      "toldAt": 1792804698745,
+      "doneAt": 1792804698745
+    },
+    {
+      "id": "nmvmibvv3d0c",
+      "text": "Classes on Mondays.",
+      "kind": "note",
+      "urgency": "normal",
+      "source": "user",
+      "createdAt": 1792852906000,
+      "dueAt": null,
+      "status": "done",
+      "tellCount": 1,
+      "toldAt": 1792853142843,
+      "doneAt": 1792853142843
+    },
+    {
+      "id": "nmvmmzlwdnln",
+      "text": "Integrate document creation features (PDF/docx/xlsx generation) into the assistant using Node.js libraries like pdf-lib or Docxtemplater.",
+      "kind": "reminder",
+      "urgency": "normal",
+      "source": "user",
+      "createdAt": 1792860731293,
+      "dueAt": 1792889531293,
+      "status": "pending",
+      "tellCount": 0,
+      "toldAt": null,
+      "doneAt": null
+    }
+  ]
+}

@@ -38,6 +38,9 @@ function chat() {
         try {
             const result = await sendMessage(trimmedMessage, {
                 onEvent(event) {
+                    // Streamed text pieces would flood the console, so they are not listed here
+                    if (event.type === "reply_delta" || event.type === "reply_abort") return;
+                    
                     console.log(`[${elapsed()}] ${event.type} ${event.name ?? ""}`);
                     if (event.type === "provider_selected") {
                         console.log(

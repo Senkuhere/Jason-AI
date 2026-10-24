@@ -1,17 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    if (window.JasonSTTTS) {
-    // keep the instance so we can call speak(...) later
-    window.jasonSttTts = window.JasonSTTTS.init({
-        chatInputSelector: '#chatInput',
-        chatMessagesSelector: '#chatMessages',
-        language: 'en-US',
-        continuous: true,
-        autoSendOnStop: false,
-        autoPlayTTS: true,
-        preferMale: true,
-        attachMicButton: true
-    });
-    }
+
     const htmlElement = document.documentElement;
     const themeToggleBtn = document.getElementById('themeToggleBtn');
     const chatInput = document.getElementById('chatInput');
@@ -356,9 +344,9 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             setGlobeState('thinking', 0.4);
         }, 300);
-        await new Promise(resolve => setTimeout(resolve, 700));
 
         setTypingIndicator(true);
+        if (window.jasonStream) window.jasonStream.reset();   // a new request: forget any old streaming bubble
         try {
             const response = await fetch("/api/chat", {
                 method: "POST",
@@ -368,7 +356,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({
                     message: text,
                     images: imagesToSend,
-                    files: filesToSend
+                    files: filesToSend,
+                    // Lets the server send early sentences back to THIS page only
+                    clientId: window.jasonClientId || null
                 })
             });
 
@@ -378,8 +368,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 throw new Error(data.error || "Jason could not process the message.");
             }
 
-            appendMessage("assistant", data.reply);
             
+            // If the answer was already streaming into a bubble, finish that bubble instead of adding a second one
+            const wasStreamed = window.jasonStream
+                ? window.jasonStream.finish(String(data.reply || ""))
+                : false;
+
+            if (!wasStreamed) appendMessage("assistant", data.reply);
             // Auto-play assistant voice if STT+TTS was initialized
             // --------------TRIAL STT+TTS----------------------
 
@@ -394,6 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             setGlobeState('idle', 0.5);
         } catch (error) {
+            if (window.jasonStream) window.jasonStream.discard();   // remove a half-streamed answer
             appendMessage("assistant", `Connection error: ${error.message}`);
             setGlobeState('idle', 0.5);
         } finally {
@@ -463,6 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         chatMessages.appendChild(row);
         scrollToBottom();
+        return row;   // streaming needs the row, to keep updating its text
     }
     function displayFailureEvents(events = []) {
         const uniqueFailures = new Map();
@@ -565,6 +562,16 @@ document.addEventListener('DOMContentLoaded', () => {
             scanLaserOpacity: 0.15,
             indicatorColorMix: 0.0
         },
+        speaking: {
+            rotationSpeed: 0.0022,
+            ringSpeedMultiplier: 1.5,
+            corePulseIntensity: 2.2,
+            particleSpeed: 0.03,
+            lineOpacity: 0.38,
+            scanLaserOpacity: 0.0,
+            indicatorColorMix: 0.0
+        },
+
         thinking: {
             rotationSpeed: 0.0028,
             ringSpeedMultiplier: 1.8,
@@ -637,6 +644,52 @@ document.addEventListener('DOMContentLoaded', () => {
     function lerp(a, b, t) { return a + (b - a) * t; }
 
     window.startThinking = function () { setGlobeState('thinking', 0.35); };
+    // Lets voice.js show the "speaking" look on the globe while Jason talks
+    window.setJasonGlobeState = setGlobeState;
+
+     // Lets events.js show a message Jason sent on his own (not an answer to anything)
+    window.jasonAppendMessage = function (role, text) {
+        appendMessage(role, text);
+        scrollToBottom();
+    };
+
+        // ---------- Streaming answer: one chat bubble that grows while Jason's answer arrives ----------
+    let streamRow = null;   // the bubble being filled, or null when there is none
+
+    function renderStreamText(fullText) {
+        const textBox = streamRow.querySelector('.message-bubble > div:last-child');
+        if (textBox) textBox.innerHTML = escapeHtml(fullText).replace(/\n/g, '<br>');
+        scrollToBottom();
+    }
+
+    window.jasonStream = {
+        // Shows the answer so far (creates the bubble the first time)
+        update(fullText) {
+            if (!streamRow) {
+                setTypingIndicator(false);                       // the growing bubble replaces the typing dots
+                streamRow = appendMessage('assistant', fullText);
+                return;
+            }
+            renderStreamText(fullText);
+        },
+        // What was streamed was not the final answer (a tool is about to be used): remove it, show the dots again
+        discard() {
+            if (!streamRow) return;
+            streamRow.remove();
+            streamRow = null;
+            setTypingIndicator(true);
+        },
+        // The final reply arrived. If a bubble exists, put the final text in it and return true
+        finish(finalText) {
+            if (!streamRow) return false;
+            renderStreamText(finalText);
+            streamRow = null;
+            return true;
+        },
+        // A new request starts: forget any old bubble
+        reset() { streamRow = null; }
+    };
+
     window.stopThinking = function () { setGlobeState('idle', 0.6); };
 
     function initThreeGlobe() {
