@@ -1,0 +1,300 @@
+{
+  "kind": "general",
+  "brief": "Creating a presentable presentation based on the Ubuntu CLI Cheat Sheet, covering system information, commands, system monitoring, file management, package management, and user management.",
+  "createdAt": "2026-10-25T07:31:32.492Z",
+  "spec": {
+    "title": "Ubuntu CLI Cheat Sheet",
+    "subtitle": "Essential Operations and System Management",
+    "author": "System Administration Team",
+    "audience": "Technical Teams and DevOps Engineers",
+    "theme": "executive",
+    "slides": [
+      {
+        "type": "title",
+        "eyebrow": "",
+        "title": "Ubuntu Command Line Interface",
+        "subtitle": "A concise guide to system management, monitoring, and operations",
+        "body": "",
+        "bullets": [],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "This presentation serves as an executive quick-reference guide for standard Ubuntu CLI operations."
+      },
+      {
+        "type": "content",
+        "eyebrow": "",
+        "title": "System Information",
+        "subtitle": "",
+        "body": "",
+        "bullets": [
+          "uname -a: View all kernel and system information",
+          "hostnamectl: Display hostname and system architecture details",
+          "lscpu: Audit CPU architecture and core specifications",
+          "timedatectl status: Verify current system time and synchronization"
+        ],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Establish a baseline by querying the core system environment immediately upon login."
+      },
+      {
+        "type": "two_column",
+        "eyebrow": "",
+        "title": "Monitoring System Health",
+        "subtitle": "",
+        "body": "",
+        "bullets": [],
+        "left": {
+          "title": "Process Overview",
+          "body": "",
+          "bullets": [
+            "top: Real-time dynamic process monitoring",
+            "htop: Interactive, user-friendly process visualization"
+          ]
+        },
+        "right": {
+          "title": "Resource Usage",
+          "body": "",
+          "bullets": [
+            "df -h: Readable disk storage statistics",
+            "free -m: Current RAM utilization in megabytes"
+          ]
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Prioritize htop for troubleshooting as it offers superior visualization over standard top."
+      },
+      {
+        "type": "process",
+        "eyebrow": "",
+        "title": "Executing Background Commands",
+        "subtitle": "",
+        "body": "",
+        "bullets": [],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [
+          {
+            "title": "Run Background",
+            "text": "<command> &",
+            "value": "",
+            "label": ""
+          },
+          {
+            "title": "List Jobs",
+            "text": "jobs",
+            "value": "",
+            "label": ""
+          },
+          {
+            "title": "Foreground Job",
+            "text": "fg <job_number>",
+            "value": "",
+            "label": ""
+          }
+        ],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Efficient process control minimizes terminal clutter during long-running tasks."
+      },
+      {
+        "type": "content",
+        "eyebrow": "",
+        "title": "Service Management",
+        "subtitle": "",
+        "body": "",
+        "bullets": [
+          "sudo systemctl start <service>: Initialize a specific service",
+          "sudo systemctl stop <service>: Halt an active service",
+          "sudo systemctl status <service>: Review current operational state"
+        ],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Systemd is the standard for service control; ensure sudo privileges are active."
+      },
+      {
+        "type": "two_column",
+        "eyebrow": "",
+        "title": "Core File & User Management",
+        "subtitle": "",
+        "body": "",
+        "bullets": [],
+        "left": {
+          "title": "File Operations",
+          "body": "",
+          "bullets": [
+            "ls: Directory contents listing",
+            "cp: Copy source to destination",
+            "mv: Move or rename files"
+          ]
+        },
+        "right": {
+          "title": "User Administration",
+          "body": "",
+          "bullets": [
+            "w: List currently logged-in sessions",
+            "sudo adduser: Create new system users"
+          ]
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Standard file manipulation and user audit basics."
+      },
+      {
+        "type": "content",
+        "eyebrow": "",
+        "title": "Package & Network Management",
+        "subtitle": "",
+        "body": "",
+        "bullets": [
+          "sudo apt install <package>: Install software dependencies",
+          "apt search <package>: Locate specific repository packages",
+          "ip addr show: Inspect network interfaces and IP addresses",
+          "ping <host>: Verify network connectivity"
+        ],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Use apt for dependency resolution; always verify network interfaces before troubleshooting connectivity."
+      },
+      {
+        "type": "content",
+        "eyebrow": "",
+        "title": "Security & Firewall",
+        "subtitle": "",
+        "body": "",
+        "bullets": [
+          "sudo ufw status: Check active firewall rules",
+          "sudo ufw enable: Activate Uncomplicated Firewall",
+          "sudo pro attach <token>: Register system with Ubuntu Pro",
+          "sudo pro enable livepatch: Apply kernel security without reboots"
+        ],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Livepatch significantly reduces maintenance downtime by eliminating reboot cycles for patches."
+      },
+      {
+        "type": "section",
+        "eyebrow": "",
+        "title": "Operational Best Practices",
+        "subtitle": "",
+        "body": "Maintain system integrity by utilizing package managers for software, enabling firewall protections by default, and streamlining kernel updates via Ubuntu Pro.",
+        "bullets": [],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Summarize the philosophy of secure and stable Ubuntu administration."
+      },
+      {
+        "type": "closing",
+        "eyebrow": "",
+        "title": "Next Steps",
+        "subtitle": "",
+        "body": "",
+        "bullets": [
+          "Audit existing servers for Ubuntu Pro compliance",
+          "Standardize monitoring tools across all environments",
+          "Review shell history for repetitive task automation"
+        ],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Encourage the team to integrate these commands into their daily workflow and automation scripts."
+      }
+    ],
+    "notesForUser": "No placeholder statistics used. All commands provided are based on the user's source material. Ensure your team has sudo access to perform systemctl, ufw, and pro commands."
+  }
+}

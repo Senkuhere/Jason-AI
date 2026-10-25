@@ -41,6 +41,19 @@ import { startScreenAwareness,
 
 import { logCapability } from "./capability-logger.js";
 
+import { startInitiative, 
+         noteRequestStarted, 
+         noteRequestFinished } 
+from "./initiative.js";
+
+// Tells you when a reminder from Jason's notebook comes due
+import { startReminders } from "./reminders.js";
+
+import { startRhythm } from "./daily/rhythm.js";
+
+// Keeps the story of the user's day (what is open on the computer, and when)
+import { startDayLog } from "./daylog.js";
+
 const MAX_AGENT_STEPS = 15;
 const MAX_TOOL_CALLS_PER_STEP = 8;
 
@@ -616,7 +629,9 @@ export async function sendMessage(
     );
 
     // Added to the day's story, so later he knows what was said and when
-    logUserMessage(trimmedMessage || "(sent an image)");
+    // Record the message before building Jason's awareness of the day.
+    await logUserMessage(trimmedMessage || "(sent an image)");
+
     let longTermMemories = [];
 
     if (longTermMemoryAvailable) {
@@ -648,10 +663,14 @@ export async function sendMessage(
         }
     }
 
+    // buildAwarenessText is asynchronous, so wait for the completed day summary.
+    // buildLiveContext expects this value under the property name "awareness".
+    const awareness = await buildAwarenessText();
+
     const prompt = buildLiveContext({
         currentDate: getCurrentDate(),
         screenContext: getScreenContext(),
-        awarenessText: buildAwarenessText()
+        awareness
     }) + "\n\n" + buildChatPrompt(effectiveMessage, longTermMemories);
 
     const systemInstruction = buildJasonSystemPrompt();
@@ -727,6 +746,14 @@ export async function sendMessage(
     let longTermMemoryAvailable = false;
 
 export async function initializeJason() {
+    // Start continuous window and monitor awareness for every entry point.
+    // This lets both the web interface and terminal version receive screen context.
+    startScreenAwareness();
+    startInitiative();
+    startReminders();
+    startRhythm();      // morning briefing and evening review
+    startDayLog();
+
     try {
         await loadShortTermMemory();
     } catch (error) {

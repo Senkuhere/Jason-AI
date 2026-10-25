@@ -82,6 +82,9 @@ const RECENT_SAID_COUNT     = Math.round(envNumber("INITIATIVE_RECENT_SAID", 12)
 // ======================================================================
 let settings = {
     mode: process.env.INITIATIVE_MODE || "normal",
+    autonomousScreenVision: ["on", "true", "1"].includes(           // Whether initiative may capture an actual screenshot.
+        String(process.env.INITIATIVE_SCREEN_VISION || "").toLowerCase() // Window titles remain available even when this is false.
+    ),
     quietUntil: null,     // a time (milliseconds), set by "be quiet for an hour"
     checkEveryMinutes: null,   // set by "check in every 20 minutes". null = use the mode's own rhythm
     lastSpokeAt: 0,
@@ -445,10 +448,17 @@ async function decide(context, { forced = false } = {}) {
 
     // Once in a while (and always when he was asked to think of something now), look at a few
     // read-only things first: the date, the computer's state, his saved notes
-    if (lookAroundToolNames().length > 0 && (forced || Math.random() < lookAroundChance())) {
+    const availableLookAroundTools = lookAroundToolNames({
+        allowScreenVision: settings.autonomousScreenVision
+    });
+
+    if (
+        availableLookAroundTools.length > 0 &&
+        (forced || Math.random() < lookAroundChance())
+    ) {
         try {
             const result = await decideWithTools({
-                ai, model: MODEL, instructions, context, thinkingLevel
+                ai, model: MODEL, instructions, context, thinkingLevel, allowScreenVision: settings.autonomousScreenVision
             });
 
             console.log(
@@ -686,12 +696,18 @@ export function getInitiativeStatus() {
             : "I have not spoken up yet today."
     );
 
+    lines.push(
+        settings.autonomousScreenVision
+            ? "I am allowed to inspect the actual screen when deciding whether to speak."
+            : "I only use window titles for initiative and will not capture screenshots on my own."
+    );
+    
     return lines.join(" ");
 }
 
 // mode: off | rare | normal | chatty.  quietMinutes: stay quiet this long (0 ends quiet time).
 // thinkNow: check right away whether there is something to say (for testing).
-export function setInitiativeSettings({ mode, quietMinutes, thinkNow, checkEveryMinutes } = {}) {
+export function setInitiativeSettings({ mode, quietMinutes, thinkNow, checkEveryMinutes, screenVision } = {}) {
     const notes = [];
 
     if (mode) {
@@ -746,6 +762,20 @@ export function setInitiativeSettings({ mode, quietMinutes, thinkNow, checkEvery
             settings.quietUntil = null;
             notes.push("I am free to speak up again");
         }
+    }
+
+    if (screenVision !== undefined) {
+        if (typeof screenVision !== "boolean") {
+            throw new Error("screenVision must be true or false.");
+        }
+
+        settings.autonomousScreenVision = screenVision;
+
+        notes.push(
+            screenVision
+                ? "I may look at the actual screen when deciding whether something is worth mentioning"
+                : "I will not capture screenshots on my own"
+        );
     }
 
     if (thinkNow) {

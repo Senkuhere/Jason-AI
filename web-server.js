@@ -36,6 +36,8 @@ from "./initiative.js";
 // Tells you when a reminder from Jason's notebook comes due
 import { startReminders } from "./reminders.js";
 
+import { startRhythm } from "./daily/rhythm.js";
+
 // Keeps the story of the user's day (what is open on the computer, and when)
 import { startDayLog } from "./daylog.js";
 
@@ -530,6 +532,7 @@ async function start() {
             // Start the heartbeat that lets Jason speak up on his own
             startInitiative();
             startReminders();
+            startRhythm();      // morning briefing and evening review
             startDayLog();
         });
     } catch (error) {

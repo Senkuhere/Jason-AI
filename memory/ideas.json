@@ -32,9 +32,90 @@
       "text": "Since your Database Systems exam is coming up this Thursday, Sir, I had a thought: we could write a small practice script that generates random SQL query challenges for you to solve, which might be a more interactive way to prepare than just reviewing your notes.",
       "topic": "Database exam preparation",
       "why": "The user is a BSIT student with a specific upcoming exam on Thursday.",
-      "status": "new",
+      "status": "shared",
       "createdAt": 1792853496612,
-      "sharedAt": null
+      "sharedAt": 1792889726514
+    },
+    {
+      "id": "imvn2h98omtl",
+      "text": "Since you're currently exploring Node.js document generation and have that database exam coming up, Sir, I had a thought: we could build a simple script that parses your raw markdown notes and converts them directly into a nicely formatted PDF study guide, which would give you a practical test case for your integration work while helping you prep.",
+      "topic": "Automated study guide",
+      "why": "Combines current learning goal with exam prep.",
+      "status": "shared",
+      "createdAt": 1792886748937,
+      "sharedAt": 1792886780114
+    },
+    {
+      "id": "imvn3cvir5jd",
+      "text": "Sir, since you mentioned wanting to improve your guitar playing by ear, I had a thought: we could write a simple script that quizzes you by randomly generating a note or scale for you to identify on your fretboard, which could turn your daily practice into a quick, interactive game.",
+      "topic": "Guitar ear training",
+      "why": "It directly addresses the user's specific struggle with playing by ear.",
+      "status": "shared",
+      "createdAt": 1792888224147,
+      "sharedAt": 1792914432050
+    },
+    {
+      "id": "imvn5hlrluv6",
+      "text": "Sir, for that cinematic Three.js interface you're building, I had a thought: we could add a subtle 'pulse' or 'flow' effect that reacts to my processing status, so you get immediate, satisfying visual feedback whenever I'm actively thinking or triggering an initiative.",
+      "topic": "Three.js UI feedback",
+      "why": "It directly improves their current UI project and makes their interactions with me feel more responsive and 'alive'.",
+      "status": "shared",
+      "createdAt": 1792891804017,
+      "sharedAt": 1792913441823
+    },
+    {
+      "id": "imvnivz8cu28",
+      "text": "Since you're building that Three.js UI for our communication, Sir, I had a thought: we could add a 'workspace widget' that dynamically displays the last file you modified in your active project folders, giving you an at-a-glance update on your progress without needing to switch windows.",
+      "topic": "Workspace UI Widget",
+      "why": "It integrates his active web project with his workflow efficiency.",
+      "status": "shared",
+      "createdAt": 1792914309660,
+      "sharedAt": 1792915413278
+    },
+    {
+      "id": "imvnku1i2pjq",
+      "text": "Sir, since you're finalizing the document generation tools and have classes tomorrow, I had a thought: we could build a quick script to export your active 'to-do' list from our notes into a clean, printable PDF checklist—it would be a perfect practical test for your new generator and help you keep your tasks organized for your Monday schedule.",
+      "topic": "Practical test case",
+      "why": "Links his current focus on document generation with his upcoming academic schedule in a useful, practical way.",
+      "status": "shared",
+      "createdAt": 1792917578522,
+      "sharedAt": 1792917689977
+    },
+    {
+      "id": "imvnluwsec4e",
+      "text": "Since you're working on that cinematic Three.js UI, Sir, I had a thought: we could add a 'Lecture Mode' toggle that strips back the interface to a high-contrast, text-heavy view—it would make referencing your study notes much easier during class without being distracting.",
+      "topic": "Three.js UI Enhancement",
+      "why": "Combines his current UI development with his upcoming class schedule.",
+      "status": "shared",
+      "createdAt": 1792919298686,
+      "sharedAt": 1792926311528
+    },
+    {
+      "id": "imvnotx5fwe1",
+      "text": "Since you're refining that cinematic Three.js UI, Sir, I had a thought: we could build a 'Fretboard Companion' module for it. It could dynamically visualize the major scales you're working on in that same dark-themed style, making it much easier to map out finger positions while you practice.",
+      "topic": "Guitar Practice UI",
+      "why": "Combines his guitar learning goals with his ongoing Three.js web UI project.",
+      "status": "shared",
+      "createdAt": 1792924291347,
+      "sharedAt": 1792928075371
+    },
+    {
+      "id": "imvnrh2xzjvd",
+      "text": "Since you're actively working on your dance trivia project, Sir, I had a thought: we could build a quick 'Export to PDF' feature right in your trivia interface, allowing you to instantly turn your trivia questions into a printable study sheet—it would be a perfect, practical test for the document generation tools you're building today.",
+      "topic": "Trivia PDF Export",
+      "why": "It connects his current project activity with his specific goal of implementing document generation.",
+      "status": "shared",
+      "createdAt": 1792928731175,
+      "sharedAt": 1792929036965
+    },
+    {
+      "id": "imvntoufg73i",
+      "text": "Sir, since you are refining your PHyVIA presentation for class tomorrow, I had a thought: we could write a script that extracts your core slide points and generates a 'Speaker's Cheat Sheet' PDF, giving you a handy, printable reference for your talking points when you stand up to present.",
+      "topic": "Speaker Notes Generator",
+      "why": "Directly supports his class prep for tomorrow.",
+      "status": "shared",
+      "createdAt": 1792932452620,
+      "sharedAt": 1792933273584
     }
   ]
 }

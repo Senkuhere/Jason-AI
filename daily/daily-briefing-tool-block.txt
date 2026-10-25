@@ -1,0 +1,57 @@
+    [
+        "daily_briefing",
+        capability({
+            name: "daily_briefing",
+            description:
+                "Jason's daily rhythm. He gives a morning briefing the first time the user is at the computer each " +
+                "morning and an evening review at night, by himself. With action 'now' he gives one right away " +
+                "(kind: morning or evening; if the user does not say, leave kind out and he picks by the time of day). " +
+                "With action 'settings' he changes them: turn the morning briefing or the evening review on or off, " +
+                "set the hour the morning briefing may start (0 to 23, for example 6) or the hour the evening review " +
+                "comes (0 to 23, for example 20). With action 'settings' and nothing else, he reports the current settings.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    action: { type: "STRING", enum: ["now", "settings"], description: "Give a briefing now, or change or read the settings" },
+                    kind: { type: "STRING", enum: ["morning", "evening"], description: "Which one to give now" },
+                    morningEnabled: { type: "BOOLEAN", description: "Turn the morning briefing on or off" },
+                    eveningEnabled: { type: "BOOLEAN", description: "Turn the evening review on or off" },
+                    morningStartHour: { type: "NUMBER", description: "The earliest hour the morning briefing may be given (0 to 23)" },
+                    eveningHour: { type: "NUMBER", description: "The hour after which the evening review is given (0 to 23)" },
+                    say: {
+                        type: "STRING",
+                        description: "One short, natural sentence about what you are doing, in your own voice."
+                    }
+                },
+                required: ["action"]
+            },
+            execute: async ({ action, kind, morningEnabled, eveningEnabled, morningStartHour, eveningHour }) => {
+                const execution = { type: "daily_briefing", platform: "windows" };
+
+                if (action === "now") {
+                    // No kind given: before 3 PM (Manila) it is a morning briefing, after that an evening review
+                    const hour = new Date(Date.now() + 8 * 3600_000).getUTCHours();
+                    const chosen = kind || (hour < 15 ? "morning" : "evening");
+
+                    return { ok: true, execution, kind: chosen, message: await briefingNow(chosen) };
+                }
+
+                const changes = { morningEnabled, eveningEnabled, morningStartHour, eveningHour };
+                const asked = Object.values(changes).some(value => value !== undefined && value !== null);
+
+                if (!asked) return { ok: true, execution, settings: await getRhythmSettings() };
+
+                const result = await setRhythmSettings(changes);
+                return { ok: true, execution, settings: result.settings, notes: result.notes };
+            },
+            mutating: true,
+            instantReply: (args, result) => {
+                if (args.action === "now") return result.message;     // the briefing itself is the answer
+
+                const say = typeof args.say === "string" ? args.say.trim() : "";
+                if (say) return say;
+
+                return result.notes?.length ? `Done, Sir. ${result.notes.join(", ")}.` : null;
+            }
+        })
+    ],

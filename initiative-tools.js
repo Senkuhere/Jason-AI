@@ -186,12 +186,16 @@ const LOOK_AROUND_TOOLS = {
 
 // Which of those tools are switched on. INITIATIVE_TOOLS=off turns them all off,
 // INITIATIVE_TOOLS=get_current_time,get_battery keeps only the ones listed.
-export function lookAroundToolNames() {
+export function lookAroundToolNames({allowScreenVision = false } = {}) {
     const setting = String(process.env.INITIATIVE_TOOLS || "").trim().toLowerCase();
 
     if (setting === "off") return [];
 
-    const all = Object.keys(LOOK_AROUND_TOOLS);
+    // Actual screenshot vision is private and relatively expensive, so initiative
+    // only receives that tool when the user has explicitly enabled it.
+    const all = Object.keys(LOOK_AROUND_TOOLS).filter(
+        name => allowScreenVision || name !== "look_at_screen"
+    );
 
     if (!setting) return all;
 
@@ -267,8 +271,8 @@ const TOTAL_TIMEOUT_MS = 55000;  // the whole look-around, including the answer 
 // ======================================================================
 // The look-around itself. Returns { speak, message, reason, toolsUsed }.
 // ======================================================================
-export async function decideWithTools({ ai, model, instructions, context, thinkingLevel = "LOW" }) {
-    const names = lookAroundToolNames();
+export async function decideWithTools({ ai, model, instructions, context, thinkingLevel = "LOW", allowScreenVision = false } = {}) {
+    const names = lookAroundToolNames({ allowScreenVision });
 
     if (names.length === 0) throw new Error("No look-around tools are enabled.");
 

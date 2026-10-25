@@ -1,0 +1,24 @@
+{
+  "settings": {
+    "morningEnabled": true,
+    "eveningEnabled": true,
+    "morningStartHour": 5,
+    "morningEndHour": 14,
+    "eveningHour": 21
+  },
+  "done": {
+    "morning": "",
+    "evening": "2026-10-25"
+  },
+  "tries": {
+    "date": "2026-10-25",
+    "morning": 0,
+    "evening": 1
+  },
+  "reviews": [
+    {
+      "date": "2026-10-25",
+      "text": "The user spent the evening refining project code and organizing file structures, with classes scheduled for Monday afternoon."
+    }
+  ]
+}

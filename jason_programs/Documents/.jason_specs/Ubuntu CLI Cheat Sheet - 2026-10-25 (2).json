@@ -1,0 +1,318 @@
+{
+  "kind": "general",
+  "brief": "A cheat sheet for Ubuntu CLI commands, formatted nicely in slides for easy reference. It should include common commands, usage examples, and any relevant tips.",
+  "createdAt": "2026-10-25T07:36:20.094Z",
+  "spec": {
+    "title": "Ubuntu CLI Cheat Sheet",
+    "subtitle": "Essential Commands for Efficiency and Control",
+    "author": "System Administrator",
+    "audience": "Developers and System Administrators",
+    "theme": "aurora",
+    "slides": [
+      {
+        "type": "title",
+        "eyebrow": "",
+        "title": "Ubuntu CLI Cheat Sheet",
+        "subtitle": "Essential Commands for Efficiency and Control",
+        "body": "",
+        "bullets": [],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Introduction to the presentation. Frame this as a navigational tool for the shell environment."
+      },
+      {
+        "type": "content",
+        "eyebrow": "",
+        "title": "Navigating the File System",
+        "subtitle": "",
+        "body": "",
+        "bullets": [
+          "pwd: Display the current working directory path",
+          "ls -la: List all files and directories with details",
+          "cd [directory]: Change directory to the specified path",
+          "mkdir [name]: Create a new directory",
+          "rmdir [name]: Remove an empty directory"
+        ],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Start with basics. These commands form the foundation of file system interaction."
+      },
+      {
+        "type": "two_column",
+        "eyebrow": "",
+        "title": "File Operations",
+        "subtitle": "",
+        "body": "",
+        "bullets": [],
+        "left": {
+          "title": "Management",
+          "body": "",
+          "bullets": [
+            "touch [file]: Create an empty file",
+            "cp [source] [dest]: Copy files or directories",
+            "mv [source] [dest]: Move or rename files"
+          ]
+        },
+        "right": {
+          "title": "Removal & Viewing",
+          "body": "",
+          "bullets": [
+            "rm [file]: Remove a specific file",
+            "rm -rf [dir]: Remove a directory and contents",
+            "cat [file]: Display entire file content",
+            "less [file]: View file content with paging"
+          ]
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Warn about the 'rm -rf' command, as it is destructive and requires caution."
+      },
+      {
+        "type": "content",
+        "eyebrow": "",
+        "title": "Permissions & Ownership",
+        "subtitle": "",
+        "body": "Control access to your files and directories with these utilities.",
+        "bullets": [
+          "chmod [mode] [file]: Change file access permissions",
+          "chown [user]:[group] [file]: Change file ownership",
+          "sudo [command]: Execute a command as superuser"
+        ],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Emphasize that chmod and chown are critical for security administration."
+      },
+      {
+        "type": "process",
+        "eyebrow": "",
+        "title": "Package Management",
+        "subtitle": "",
+        "body": "",
+        "bullets": [],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [
+          {
+            "title": "Update Index",
+            "text": "sudo apt update",
+            "value": "",
+            "label": "Step 1"
+          },
+          {
+            "title": "Upgrade Packages",
+            "text": "sudo apt upgrade",
+            "value": "",
+            "label": "Step 2"
+          },
+          {
+            "title": "Install Software",
+            "text": "sudo apt install [package]",
+            "value": "",
+            "label": "Step 3"
+          },
+          {
+            "title": "Remove Software",
+            "text": "sudo apt remove [package]",
+            "value": "",
+            "label": "Step 4"
+          }
+        ],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Walk through the logical workflow of keeping a system up to date."
+      },
+      {
+        "type": "content",
+        "eyebrow": "",
+        "title": "System Monitoring",
+        "subtitle": "",
+        "body": "",
+        "bullets": [
+          "top: Real-time system resource monitor",
+          "htop: Interactive process viewer (installable)",
+          "df -h: Check disk space usage in human-readable format",
+          "free -m: View memory usage in megabytes",
+          "uptime: Display system uptime and load average"
+        ],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Focus on diagnostic commands used for troubleshooting system performance."
+      },
+      {
+        "type": "two_column",
+        "eyebrow": "",
+        "title": "Network Utilities",
+        "subtitle": "",
+        "body": "",
+        "bullets": [],
+        "left": {
+          "title": "Connectivity",
+          "body": "",
+          "bullets": [
+            "ping [host]: Test network connectivity",
+            "ip addr: Display network interface IP addresses",
+            "curl [url]: Transfer data from or to a server"
+          ]
+        },
+        "right": {
+          "title": "Secure Access",
+          "body": "",
+          "bullets": [
+            "ssh [user]@[host]: Secure remote login",
+            "scp [file] [user]@[host]: Secure copy files",
+            "ufw status: Check firewall status"
+          ]
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "These are essential for remote server management and basic debugging."
+      },
+      {
+        "type": "content",
+        "eyebrow": "",
+        "title": "Text Processing Shortcuts",
+        "subtitle": "",
+        "body": "",
+        "bullets": [
+          "grep '[pattern]' [file]: Search for text in a file",
+          "head -n [num] [file]: View the first few lines of a file",
+          "tail -f [file]: Monitor file changes in real-time",
+          "history: View previously executed commands"
+        ],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Highlight 'tail -f' as essential for reading log files dynamically."
+      },
+      {
+        "type": "content",
+        "eyebrow": "",
+        "title": "Keyboard Shortcuts",
+        "subtitle": "",
+        "body": "",
+        "bullets": [
+          "Ctrl + C: Kill the current foreground process",
+          "Ctrl + Z: Suspend the current process",
+          "Ctrl + A / E: Move cursor to start or end of line",
+          "Tab: Autocomplete file names and commands",
+          "Clear: Clear the terminal screen"
+        ],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "These shortcuts significantly increase terminal speed and quality of life."
+      },
+      {
+        "type": "closing",
+        "eyebrow": "",
+        "title": "Mastering the Terminal",
+        "subtitle": "Practice leads to proficiency",
+        "body": "",
+        "bullets": [
+          "Always verify critical commands before execution",
+          "Utilize 'man [command]' for detailed manuals",
+          "Create aliases for frequently used complex strings"
+        ],
+        "left": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "right": {
+          "title": "",
+          "body": "",
+          "bullets": []
+        },
+        "items": [],
+        "quote": "",
+        "attribution": "",
+        "chart": null,
+        "notes": "Encourage the user to read 'man' pages, as they are the primary documentation source."
+      }
+    ],
+    "notesForUser": "No placeholders were needed. Ensure the audience is aware that sudo usage requires administrative privileges."
+  }
+}

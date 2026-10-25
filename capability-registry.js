@@ -65,6 +65,14 @@ import { readDocument } from "./file_tools/document-reader.js";
 
 import { setInitiativeSettings } from "./initiative.js";
 
+import { briefingNow, 
+         getRhythmSettings, 
+        setRhythmSettings 
+} from "./daily/rhythm.js";
+
+import { createDocument } from "./file_tools/create-document.js";
+import { createPresentation } from "./file_tools/create-presentation.js";
+
 import { addNote, 
          listNotes, 
          completeNote, 
@@ -1311,10 +1319,16 @@ const capabilities = new Map([
                         type: "NUMBER",
                         description: "How often to think about speaking up, in minutes. 0 returns to the usual rhythm."
                     },
+                    screenVision: {
+                        type: "BOOLEAN",
+                        description:
+                            "Allow or prevent Jason from capturing screenshots on his own while deciding whether to speak. " +
+                            "This does not affect screen checks explicitly requested by the user."
+                    }
                 }
             },
-            execute: ({ mode, quietMinutes, thinkNow, checkEveryMinutes }) =>
-                setInitiativeSettings({ mode, quietMinutes, thinkNow, checkEveryMinutes }),
+            execute: ({ mode, quietMinutes, thinkNow, checkEveryMinutes, screenVision }) =>
+                setInitiativeSettings({ mode, quietMinutes, thinkNow, checkEveryMinutes, screenVision }),
             mutating: true,
             // The result already carries the answer, written for the user
             instantReply: (args, result) => result?.message || null
@@ -1417,6 +1431,251 @@ const capabilities = new Map([
             }
         })
     ],
+    [
+    "create_document",
+        capability({
+            name: "create_document",
+            description:
+                "Create a finished, well formatted document as a Word file (docx) and/or a PDF: reports, essays, " +
+                "proposals, letters, handouts, summaries, study reviewers, activity sheets and meeting minutes. " +
+                "The document's content is written FOR you by this tool and formatted with a consistent template " +
+                "(headings, margins, page numbers, tables, cover page), so never write the document's text yourself. " +
+                "Put every detail the user gave into brief (topic, audience, course, teacher, requirements). Put any " +
+                "facts or text the user supplied into content. kind picks the structure, template picks the look " +
+                "(academic for schoolwork, business for formal work documents, general for handouts and letters). " +
+                "formats: docx if the user wants to edit it, pdf to hand in or print, both if unclear. " +
+                "It takes up to a minute. When it finishes, tell the user what was made and where it is saved, and " +
+                "mention anything in notesForUser that they must check.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    brief: {
+                        type: "STRING",
+                        description:
+                            "What the document is about and what it must contain, with every detail the user gave."
+                    },
+                    kind: {
+                        type: "STRING",
+                        enum: ["report", "essay", "proposal", "letter", "handout", "summary", "reviewer", "activity_sheet", "minutes", "general"],
+                        description: "The kind of document"
+                    },
+                    title: { type: "STRING", description: "The title, if the user gave one" },
+                    content: {
+                        type: "STRING",
+                        description: "Facts, notes or text from the user that the document must use"
+                    },
+                    template: {
+                        type: "STRING",
+                        enum: ["academic", "business", "general"],
+                        description: "The look. Leave out to use the usual one for the kind."
+                    },
+                    formats: {
+                        type: "ARRAY",
+                        items: { type: "STRING", enum: ["docx", "pdf"] },
+                        description: "Which files to make"
+                    },
+                    length: {
+                        type: "STRING",
+                        enum: ["short", "medium", "long"],
+                        description: "Roughly 1 to 2 pages, 3 to 5 pages, or 6 to 10 pages"
+                    },
+                    pages: { type: "NUMBER", description: "An exact number of pages, if the user asked for one" },
+                    coverPage: { type: "BOOLEAN", description: "Force a cover page on or off" },
+                    tableOfContents: { type: "BOOLEAN", description: "Force a contents list on or off" },
+                    author: { type: "STRING", description: "The author's name, if the user gave it" },
+                    language: { type: "STRING", description: "The language to write in, if not English" },
+                    say: {
+                        type: "STRING",
+                        description:
+                            "One short, natural sentence saying what you are starting to write, in your own voice."
+                    }
+                },
+                required: ["brief"]
+            },
+            execute: args => createDocument(args),
+            mutating: true,
+            // The final words, built from what was actually made
+            instantReply: (args, result) => {
+                const formats = (result.files || []).map(file => file.format === "docx" ? "Word" : "PDF").join(" and ");
+                const kind = String(result.kind || "document").replace("_", " ");
+                const folder = String(result.folder || "").split(/[\\/]/).pop();
+
+                let reply = `Your ${kind === "general" ? "document" : kind} is ready, Sir. I saved "${result.title}" as ${formats} in the ${folder} folder.`;
+                if (result.notesForUser) reply += ` One thing to check: ${result.notesForUser}`;
+                if (result.problems?.length) reply += ` Something did not work: ${result.problems.join("; ")}`;
+
+                return reply;
+            }
+        })
+    ],
+    [
+    "create_presentation",
+    capability({
+        name: "create_presentation",
+        description:
+            "Create a finished, professionally designed PowerPoint presentation (.pptx). " +
+            "The tool writes the content, chooses varied slide layouts, applies a visual theme, " +
+            "and can create native editable charts, timelines, processes, comparisons and KPI cards. " +
+            "Pass every requirement into brief, including the purpose, audience and required topics. " +
+            "Put facts, notes, quotations and numerical data supplied by the user into content. " +
+            "Never invent numerical data for charts. It may take up to a minute.",
+        parameters: {
+            type: "OBJECT",
+            properties: {
+                brief: {
+                    type: "STRING",
+                    description:
+                        "What the presentation is about, its purpose, and everything it must contain."
+                },
+                kind: {
+                    type: "STRING",
+                    enum: [
+                        "pitch",
+                        "lesson",
+                        "report",
+                        "proposal",
+                        "training",
+                        "portfolio",
+                        "general"
+                    ],
+                    description: "The presentation's purpose and narrative structure."
+                },
+                title: {
+                    type: "STRING",
+                    description: "The presentation title, if supplied."
+                },
+                content: {
+                    type: "STRING",
+                    description:
+                        "Facts, notes, quotations, source material and numerical data supplied by the user."
+                },
+                audience: {
+                    type: "STRING",
+                    description: "Who will view or hear the presentation."
+                },
+                theme: {
+                    type: "STRING",
+                    enum: [
+                        "executive",
+                        "midnight",
+                        "aurora",
+                        "warm",
+                        "minimal"
+                    ],
+                    description:
+                        "Optional visual theme. Leave out unless the user requested a particular style."
+                },
+                slideCount: {
+                    type: "NUMBER",
+                    description:
+                        "Requested number of slides. Defaults to 8 and is limited to 3–20."
+                },
+                tone: {
+                    type: "STRING",
+                    description:
+                        "Requested tone, such as academic, persuasive, technical or friendly."
+                },
+                author: {
+                    type: "STRING",
+                    description: "Presenter or author's name, if supplied."
+                },
+                language: {
+                    type: "STRING",
+                    description: "Language to use when it is not English."
+                },
+                designDirection: {
+                    type: "STRING",
+                    description:
+                        "Any design request, such as modern, futuristic, elegant, bold or school-appropriate."
+                },
+                say: {
+                    type: "STRING",
+                    description:
+                        "One short natural sentence saying what presentation you are starting."
+                }
+            },
+            required: ["brief"]
+        },
+        execute: args => createPresentation(args),
+        mutating: true,
+
+        // Build the confirmation from what was actually generated.
+        instantReply: (args, result) => {
+            const folder = String(result.folder || "")
+                .split(/[\\/]/)
+                .pop();
+
+            let reply =
+                `Your presentation "${result.title}" is ready, Sir. ` +
+                `It has ${result.slideCount} slides using the ${result.theme} theme, ` +
+                `and I saved it in the ${folder} folder.`;
+
+            if (result.notesForUser) {
+                reply += ` One thing to check: ${result.notesForUser}`;
+            }
+
+            return reply;
+        }
+    })
+    ],
+        [
+        "daily_briefing",
+        capability({
+            name: "daily_briefing",
+            description:
+                "Jason's daily rhythm. He gives a morning briefing the first time the user is at the computer each " +
+                "morning and an evening review at night, by himself. With action 'now' he gives one right away " +
+                "(kind: morning or evening; if the user does not say, leave kind out and he picks by the time of day). " +
+                "With action 'settings' he changes them: turn the morning briefing or the evening review on or off, " +
+                "set the hour the morning briefing may start (0 to 23, for example 6) or the hour the evening review " +
+                "comes (0 to 23, for example 20). With action 'settings' and nothing else, he reports the current settings.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    action: { type: "STRING", enum: ["now", "settings"], description: "Give a briefing now, or change or read the settings" },
+                    kind: { type: "STRING", enum: ["morning", "evening"], description: "Which one to give now" },
+                    morningEnabled: { type: "BOOLEAN", description: "Turn the morning briefing on or off" },
+                    eveningEnabled: { type: "BOOLEAN", description: "Turn the evening review on or off" },
+                    morningStartHour: { type: "NUMBER", description: "The earliest hour the morning briefing may be given (0 to 23)" },
+                    eveningHour: { type: "NUMBER", description: "The hour after which the evening review is given (0 to 23)" },
+                    say: {
+                        type: "STRING",
+                        description: "One short, natural sentence about what you are doing, in your own voice."
+                    }
+                },
+                required: ["action"]
+            },
+            execute: async ({ action, kind, morningEnabled, eveningEnabled, morningStartHour, eveningHour }) => {
+                const execution = { type: "daily_briefing", platform: "windows" };
+
+                if (action === "now") {
+                    // No kind given: before 3 PM (Manila) it is a morning briefing, after that an evening review
+                    const hour = new Date(Date.now() + 8 * 3600_000).getUTCHours();
+                    const chosen = kind || (hour < 15 ? "morning" : "evening");
+
+                    return { ok: true, execution, kind: chosen, message: await briefingNow(chosen) };
+                }
+
+                const changes = { morningEnabled, eveningEnabled, morningStartHour, eveningHour };
+                const asked = Object.values(changes).some(value => value !== undefined && value !== null);
+
+                if (!asked) return { ok: true, execution, settings: await getRhythmSettings() };
+
+                const result = await setRhythmSettings(changes);
+                return { ok: true, execution, settings: result.settings, notes: result.notes };
+            },
+            mutating: true,
+            instantReply: (args, result) => {
+                if (args.action === "now") return result.message;     // the briefing itself is the answer
+
+                const say = typeof args.say === "string" ? args.say.trim() : "";
+                if (say) return say;
+
+                return result.notes?.length ? `Done, Sir. ${result.notes.join(", ")}.` : null;
+            }
+        })
+    ],
+
 
     
 ]);

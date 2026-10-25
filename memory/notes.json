@@ -1,32 +1,6 @@
 {
   "notes": [
     {
-      "id": "nmvloz0yd616",
-      "text": "Eat.",
-      "kind": "reminder",
-      "urgency": "normal",
-      "source": "user",
-      "createdAt": 1792803597205,
-      "dueAt": 1792803717204,
-      "status": "done",
-      "tellCount": 1,
-      "toldAt": 1792803747079,
-      "doneAt": 1792803747079
-    },
-    {
-      "id": "nmvlp3r1b1f1",
-      "text": "Stop thinking",
-      "kind": "reminder",
-      "urgency": "normal",
-      "source": "user",
-      "createdAt": 1792803817631,
-      "dueAt": 1792803877631,
-      "status": "done",
-      "tellCount": 1,
-      "toldAt": 1792804698745,
-      "doneAt": 1792804698745
-    },
-    {
       "id": "nmvmibvv3d0c",
       "text": "Classes on Mondays.",
       "kind": "note",
@@ -47,10 +21,36 @@
       "source": "user",
       "createdAt": 1792860731293,
       "dueAt": 1792889531293,
-      "status": "pending",
-      "tellCount": 0,
-      "toldAt": null,
-      "doneAt": null
+      "status": "done",
+      "tellCount": 1,
+      "toldAt": 1792886780116,
+      "doneAt": 1792886780116
+    },
+    {
+      "id": "nmvn31ru3qnb",
+      "text": "User has classes every Monday.",
+      "kind": "reminder",
+      "urgency": "high",
+      "source": "jason",
+      "createdAt": 1792887706155,
+      "dueAt": 1792891584801,
+      "status": "done",
+      "tellCount": 3,
+      "toldAt": 1792913145959,
+      "doneAt": 1792913145959
+    },
+    {
+      "id": "nmvntflaqbtr",
+      "text": "User has classes tomorrow (Monday).",
+      "kind": "reminder",
+      "urgency": "normal",
+      "source": "user",
+      "createdAt": 1792932020882,
+      "dueAt": 1792932020881,
+      "status": "done",
+      "tellCount": 1,
+      "toldAt": 1792932876747,
+      "doneAt": 1792932876747
     }
   ]
 }

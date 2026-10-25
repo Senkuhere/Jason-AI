@@ -8,7 +8,6 @@ import {
 
 import { getLongTermMemories } from "./long-term-memory.js";
 
-import { startScreenAwareness } from "./utility_tools/computer-control.js";
 
 const rl = readline.createInterface({
     input: process.stdin,
@@ -92,7 +91,6 @@ function chat() {
 }
 
 async function start() {
-    startScreenAwareness();   // starts the window helper and keeps the screen summary fresh
     try {
         
         const status = await initializeJason();

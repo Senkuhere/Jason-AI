@@ -194,7 +194,13 @@ function toRuns(segments) {
     for (const segment of segments) {
         const last = runs[runs.length - 1];
 
-        if (last && last.app === segment.app) {
+        // Merge matching applications only when their recorded periods are close.
+        // Without this check, two separate periods hours apart can appear continuous.
+        const closeInTime =
+            last &&
+            segment.from - last.to <= SAMPLE_EVERY_MS * 4;
+
+        if (last && last.app === segment.app && closeInTime) {
             last.to = segment.to;
             for (const title of segment.titles) if (last.titles.length < 2 && !last.titles.includes(title)) last.titles.push(title);
         } else {
@@ -214,14 +220,27 @@ export async function buildAwarenessText(now = Date.now()) {
         await load();
 
         const day = today(now);
-        const lines = [`What you know about the user's day (now: ${describeNow(now)}):`];
+        const lines = [
+            `What you know about the user's day (now: ${describeNow(now)}):`,
+            "When asked what the user has done today, use this section as the primary source. " +
+            "Distinguish observed computer activity from conversations and things you said yourself. " +
+            "Do not fill missing periods using guesses or unrelated long-term memories."
+        ];
 
         // On the computer, in order
         // Very short stretches are noise and are left out, except the latest one (what is happening right now)
         const allRuns = toRuns(day.segments);
+        // Keep meaningful longer sessions, but also preserve short application
+        // switches from the last 45 minutes. Development work often involves
+        // frequently switching between VS Code, a terminal and the browser.
+        const recentCutoff = now - 45 * 60_000;
+
         const runs = allRuns
             .filter((run, index) =>
-                index === allRuns.length - 1 || run.to - run.from >= 3 * 60_000 || run.app.startsWith("(")
+                index === allRuns.length - 1 ||
+                run.to - run.from >= 60_000 ||
+                run.to >= recentCutoff ||
+                run.app.startsWith("(")
             )
             .slice(-12);
 
